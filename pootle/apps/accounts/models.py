@@ -38,6 +38,7 @@ from pootle_statistics.models import Submission, SubmissionTypes
 from pootle_store.models import SuggestionStates
 
 from .managers import UserManager
+from .utils import merge_user, purge_user
 
 
 CURRENCIES = (('USD', 'USD'), ('EUR', 'EUR'), ('CNY', 'CNY'), ('JPY', 'JPY'))
@@ -240,6 +241,16 @@ class User(AbstractBaseUser):
         """
         if self.is_meta:
             raise ProtectedError('Cannot remove meta user instances', None)
+
+        purge = kwargs.pop("purge", False)
+
+        if purge:
+            purge_user(self)
+        else:
+            try:
+                merge_user(self, User.objects.get_nobody_user())
+            except User.DoesNotExist:
+                pass
 
         super(User, self).delete(*args, **kwargs)
 

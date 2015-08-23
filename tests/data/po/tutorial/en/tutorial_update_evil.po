@@ -11,9 +11,9 @@ msgstr ""
 
 #: Hello, world
 msgid "Hello, world"
-msgstr "Hello, world"
+msgstr "Hello, world EVIL"
 
 
 #: Goodbye, world
 msgid "Goodbye, world"
-msgstr "Goodbye, world"
+msgstr "Goodbye, world EVIL"
