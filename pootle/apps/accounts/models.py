@@ -34,8 +34,9 @@ from allauth.account.utils import sync_user_email_addresses
 from pootle.core.cache import make_method_key
 from pootle.core.utils.json import jsonify
 from pootle_language.models import Language
-from pootle_statistics.models import Submission, SubmissionTypes
-from pootle_store.models import SuggestionStates
+from pootle_statistics.models import (Submission, SubmissionFields,
+                                      SubmissionTypes)
+from pootle_store.models import SuggestionStates, Unit
 
 from .managers import UserManager
 
@@ -130,6 +131,45 @@ class User(AbstractBaseUser):
         should be used with user objects retrieved via `User.top_scorers()`.
         """
         return _humanize_score(getattr(self, 'total_score', self.score))
+
+    @property
+    def suggestion_reviews(self):
+        """Submissions from this user that reviews (reject/accept) unit
+        suggestions.
+
+        :return: Queryset of `Submissions`s by this user that `REJECT`/`ACCEPT`
+             `Suggestion`s
+        """
+
+        # reject_suggestion does not set field so we must exclude STATE
+        # reviews.
+        return (self.submission_set
+                    .exclude(field=SubmissionFields.STATE)
+                    .filter(type__in=SubmissionTypes.REVIEW_TYPES))
+
+    @property
+    def unit_states_changed(self):
+        """Submissions where the user has made unit state changes eg. (FUZZY,
+        TRANSLATED, UNTRANSLATED).
+
+        :return: Queryset of `STATE` change `Submissions`s that the user has
+            submitted.
+        """
+
+        return (self.submission_set
+                    .filter(field=SubmissionFields.STATE))
+
+    @property
+    def units_created(self):
+        """Units that were created by this user.
+
+        :return: Queryset of `Unit`s that were created by this user.
+        """
+        creation_subs = (self.submission_set
+                             .filter(type=SubmissionTypes.UNIT_CREATE))
+        return (Unit.objects
+                    .filter(pk__in=creation_subs.values_list("unit",
+                                                             flat=True)))
 
     @property
     def has_contact_details(self):

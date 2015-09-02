@@ -333,6 +333,37 @@ class Unit(models.Model, base.TranslationUnit):
     ############################ Properties ###################################
 
     @property
+    def edits(self):
+        """Submissions that change this unit's target
+
+        :return: Queryset of `Submissions`s that change this unit's target
+        """
+        return (self.submission_set
+                    .exclude(new_value__isnull=True)
+                    .filter(field__in=SubmissionFields.TRANSLATION_FIELDS)
+                    .filter(type__in=SubmissionTypes.EDITING_TYPES))
+
+    @property
+    def comments(self):
+        """Submissions that change this unit's comment
+
+        :return: Queryset of `Submissions`s that change this unit's comment
+        """
+        return self.submission_set.filter(field=SubmissionFields.COMMENT)
+
+    @property
+    def suggestion_reviews(self):
+        """Submissions from this unit that review (reject/accept) suggestions.
+
+        :return: Queryset of `Submissions`s for this unit that
+            `REJECT`/`ACCEPT` `Suggestion`s
+        """
+        # reject_suggestion does not set field so we must exclude STATE reviews
+        return (self.submission_set
+                    .exclude(field=SubmissionFields.STATE)
+                    .filter(type__in=SubmissionTypes.REVIEW_TYPES))
+
+    @property
     def _source(self):
         return self.source_f
 
@@ -340,6 +371,11 @@ class Unit(models.Model, base.TranslationUnit):
     def _source(self, value):
         self.source_f = value
         self._source_updated = True
+
+    @property
+    def state_changes(self):
+        return (self.submission_set
+                    .filter(field=SubmissionFields.STATE))
 
     @property
     def _target(self):

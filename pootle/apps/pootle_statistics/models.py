@@ -52,6 +52,8 @@ class SubmissionTypes(object):
     EDIT_TYPES = [NORMAL, SYSTEM]
     CONTRIBUTION_TYPES = [NORMAL, SYSTEM, SUGG_ADD]
     SUGGESTION_TYPES = [SUGG_ACCEPT, SUGG_ADD, SUGG_REJECT]
+    REVIEW_TYPES = [SUGG_ACCEPT, SUGG_REJECT]
+    EDITING_TYPES = [NORMAL, SYSTEM, UNIT_CREATE, UPLOAD]
 
 
 #: Values for the 'field' field of Submission
@@ -61,6 +63,8 @@ class SubmissionFields(object):
     TARGET = 2  # pootle_store.models.Unit.target
     STATE = 3  # pootle_store.models.Unit.state
     COMMENT = 4  # pootle_store.models.Unit.translator_comment
+
+    TRANSLATION_FIELDS = [TARGET]
 
     NAMES_MAP = {
         NONE: "",
