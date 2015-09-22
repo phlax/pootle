@@ -37,7 +37,12 @@ class Command(BaseCommand):
 
         webpack_config_file = os.path.join(default_js_dir, 'webpack.config.js')
 
-        webpack_bin = os.path.join(default_js_dir, 'node_modules/.bin/webpack')
+        npm_config_prefix = os.environ.get('NPM_CONFIG_PREFIX')
+        if npm_config_prefix:
+            webpack_bin = os.path.join(npm_config_prefix, 'bin/webpack')
+        else:
+            webpack_bin = os.path.join(default_js_dir, 'node_modules/.bin/webpack')
+
         if os.name == 'nt':
             webpack_bin = '%s.cmd' % webpack_bin
 
