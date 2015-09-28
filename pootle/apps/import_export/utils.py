@@ -23,25 +23,25 @@ from .exceptions import (UnsupportedFiletypeError, MissingPootlePathError,
 logger = logging.getLogger(__name__)
 
 
-def import_file(file, user=None):
+def import_file(file, user=None, pootle_path=None, rev=None):
+    import pdb; pdb.set_trace()
     f = getclass(file)(file.read())
     if not hasattr(f, "parseheader"):
         raise UnsupportedFiletypeError(_("Unsupported filetype '%s', only PO "
                                          "files are supported at this time\n",
                                          file.name))
     header = f.parseheader()
-    pootle_path = header.get("X-Pootle-Path")
+    pootle_path = pootle_path or header.get("X-Pootle-Path")
     if not pootle_path:
         raise MissingPootlePathError(_("File '%s' missing X-Pootle-Path "
                                        "header\n", file.name))
-
-    rev = header.get("X-Pootle-Revision")
-    if not rev or not rev.isdigit():
+    if rev is None:
+        rev = header.get("X-Pootle-Revision")
+    if rev is None or (isinstance(rev, str) and not rev.isdigit()):
         raise MissingPootleRevError(_("File '%s' missing or invalid "
                                       "X-Pootle-Revision header\n",
                                       file.name))
     rev = int(rev)
-
     try:
         store, created = Store.objects.get_or_create(pootle_path=pootle_path)
     except Exception as e:
