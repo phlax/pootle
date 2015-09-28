@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 def import_file(file, user=None, pootle_path=None, rev=None):
-    import pdb; pdb.set_trace()
     f = getclass(file)(file.read())
     if not hasattr(f, "parseheader"):
         raise UnsupportedFiletypeError(_("Unsupported filetype '%s', only PO "
