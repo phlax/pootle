@@ -610,7 +610,7 @@ def _get_units_new(request):
             try:
                 index = None
                 uid = uids[0]
-                for i, unitid in uid_values.values_list("id", flat=True):
+                for i, unitid in enumerate(uid_values.values_list("id", flat=True)):
                     if unitid == uid:
                         index = i
                         break
