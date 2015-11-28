@@ -444,19 +444,7 @@ def _get_critical_checks_snippet(request, unit):
     return template.render(RequestContext(request, ctx))
 
 
-@ajax_required
-def get_units(request):
-    """Gets source and target texts and its metadata.
-
-    :return: A JSON-encoded string containing the source and target texts
-        grouped by the store they belong to.
-
-        The optional `count` GET parameter defines the chunk size to
-        consider. The user's preference will be used by default.
-
-        When the `initial` GET parameter is present, a sorted list of
-        the result set ids will be returned too.
-    """
+def _get_units_old(request):
     pootle_path = request.GET.get('path', None)
     if pootle_path is None:
         raise Http400(_('Arguments missing.'))
@@ -506,9 +494,10 @@ def get_units(request):
             # Since `extra()` has been used before, it's necessary to explicitly
             # request the `store__pootle_path` field. This is a subtetly in
             # Django's ORM.
+
             uid_list = [u['id'] for u in step_queryset.values('id',
                                                               'store__pootle_path')]
-        else:
+
             # Not using `values_list()` here because it doesn't know about all
             # existing relations when `extra()` has been used before in the
             # queryset. This affects annotated names such as those ending in
@@ -518,9 +507,7 @@ def get_units(request):
             # `values('sort_by_field', 'id')` with `id` otherwise
             # Django looks for `sort_by_field` field in the initial table.
             # https://code.djangoproject.com/ticket/19434
-            uid_list = [u['id'] for u in step_queryset.values('id',
-                                                              'sort_by_field',
-                                                              'store__pootle_path')]
+            uid_list = [u['id'] for u in step_queryset.values('id', 'sort_by_field', 'store__pootle_path')]
 
         if len(uids) == 1:
             try:
@@ -528,7 +515,7 @@ def get_units(request):
                 index = uid_list.index(uid)
                 begin = max(index - chunk_size, 0)
                 end = min(index + chunk_size + 1, len(uid_list))
-                uids = uid_list[begin:end]
+                uids = uid_list = [x for x in uid_list[begin:end]]
             except ValueError:
                 raise Http404  # `uid` not found in `uid_list`
         else:
@@ -549,6 +536,130 @@ def get_units(request):
         response['uIds'] = uid_list
 
     return JsonResponse(response)
+
+
+def _get_units_new(request):
+    pootle_path = request.GET.get('path', None)
+    if pootle_path is None:
+        raise Http400(_('Arguments missing.'))
+
+    User = get_user_model()
+    request.profile = User.get(request.user)
+    limit = request.profile.get_unit_rows()
+    vfolder = None
+
+    if 'virtualfolder' in settings.INSTALLED_APPS:
+        from virtualfolder.helpers import extract_vfolder_from_path
+
+        vfolder, pootle_path = extract_vfolder_from_path(pootle_path)
+
+    units_qs = Unit.objects.get_for_path(pootle_path, request.profile)
+
+    if vfolder is not None:
+        units_qs = units_qs.filter(vfolders=vfolder)
+
+    units_qs = units_qs.select_related(
+        'store__translation_project__project',
+        'store__translation_project__language',
+    )
+    step_queryset = get_step_query(request, units_qs)
+
+    is_initial_request = request.GET.get('initial', False)
+    chunk_size = request.GET.get('count', limit)
+    uids_param = filter(None, request.GET.get('uids', '').split(u','))
+    uids = filter(None, map(to_int, uids_param))
+
+    units = []
+    unit_groups = []
+    uid_list = []
+
+    if is_initial_request:
+        sort_by_field = None
+        if len(step_queryset.query.order_by) == 1:
+            sort_by_field = step_queryset.query.order_by[0]
+
+        sort_on = None
+        for key, item in ALLOWED_SORTS.items():
+            if sort_by_field in item.values():
+                sort_on = key
+                break
+
+        if sort_by_field is None or sort_on == 'units':
+            # Since `extra()` has been used before, it's necessary to explicitly
+            # request the `store__pootle_path` field. This is a subtetly in
+            # Django's ORM.
+
+            #uid_list = [u['id'] for u in step_queryset.values('id',
+            #                                                  'store__pootle_path')]
+
+            uid_values = step_queryset.values('id', 'store__pootle_path')
+
+        else:
+            # Not using `values_list()` here because it doesn't know about all
+            # existing relations when `extra()` has been used before in the
+            # queryset. This affects annotated names such as those ending in
+            # `__max`, where Django thinks we're trying to lookup a field on a
+            # relationship field. That's why `sort_by_field` alias for `__max`
+            # is used here. This alias must be queried in
+            # `values('sort_by_field', 'id')` with `id` otherwise
+            # Django looks for `sort_by_field` field in the initial table.
+            # https://code.djangoproject.com/ticket/19434
+            uid_values = step_queryset.values('id', 'sort_by_field', 'store__pootle_path')
+
+        if len(uids) == 1:
+            try:
+                uid_list = uid_values.values_list("id", flat=True)
+                uid = uids[0]
+                index = uid_list.index(uid)
+                begin = max(index - chunk_size, 0)
+                end = min(index + chunk_size + 1, len(uid_list))
+                uids = uid_list = [x for x in uid_list[begin:end]]
+            except ValueError:
+                raise Http404  # `uid` not found in `uid_list`
+        else:
+            count = 2 * chunk_size
+            uids = uid_list = [
+                x for x in uid_values[:count].values_list("id", flat=True)]
+
+    if not units and uids:
+        units = step_queryset.filter(id__in=uids)
+
+    units_by_path = groupby(units, lambda x: x.store.pootle_path)
+    for pootle_path, units in units_by_path:
+        unit_groups.append(_path_units_with_meta(pootle_path, units))
+
+    response = {
+        'unitGroups': unit_groups,
+    }
+    if uid_list:
+        response['uIds'] = uid_list
+
+    return response
+
+
+@ajax_required
+def get_units(request):
+    """Gets source and target texts and its metadata.
+
+    :return: A JSON-encoded string containing the source and target texts
+        grouped by the store they belong to.
+
+        The optional `count` GET parameter defines the chunk size to
+        consider. The user's preference will be used by default.
+
+        When the `initial` GET parameter is present, a sorted list of
+        the result set ids will be returned too.
+    """
+    import time
+    start = time.time()
+    old_units = _old_get_units(request)
+    next_time = time.time()
+    new_units = _new_get_units(request)
+    finish = time.time()
+    print "new way took: %s" % finish - next_time
+    print "old way took: %s" % next_time - start
+    return JSONResponse(old_units)
+
 
 
 @ajax_required
