@@ -515,7 +515,7 @@ def _get_units_old(request):
                 index = uid_list.index(uid)
                 begin = max(index - chunk_size, 0)
                 end = min(index + chunk_size + 1, len(uid_list))
-                uids = uid_list = [x for x in uid_list[begin:end]]
+                uids = uid_list[begin:end]
             except ValueError:
                 raise Http404  # `uid` not found in `uid_list`
         else:
