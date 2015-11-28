@@ -535,7 +535,7 @@ def _get_units_old(request):
     if uid_list:
         response['uIds'] = uid_list
 
-    return JsonResponse(response)
+    return response
 
 
 def _get_units_new(request):
