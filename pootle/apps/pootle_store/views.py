@@ -658,7 +658,7 @@ def get_units(request):
     finish = time.time()
     print "new way took: %s" % (next_time - start)
     print "old way took: %s" % (finish - next_time)
-    return JSONResponse(old_units)
+    return JsonResponse(old_units)
 
 
 
