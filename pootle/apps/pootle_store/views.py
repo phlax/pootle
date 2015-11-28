@@ -497,7 +497,7 @@ def _get_units_old(request):
 
             uid_list = [u['id'] for u in step_queryset.values('id',
                                                               'store__pootle_path')]
-
+        else:
             # Not using `values_list()` here because it doesn't know about all
             # existing relations when `extra()` has been used before in the
             # queryset. This affects annotated names such as those ending in
