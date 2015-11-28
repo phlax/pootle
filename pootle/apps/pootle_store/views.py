@@ -608,9 +608,14 @@ def _get_units_new(request):
 
         if len(uids) == 1:
             try:
-                uid_list = uid_values.values_list("id", flat=True)
+                index = None
                 uid = uids[0]
-                index = uid_list.index(uid)
+                for i, unitid in uid_values.values_list("id", flat=True):
+                    if unitid == uid:
+                        index = i
+                        break
+                if index is None:
+                    raise ValueError
                 begin = max(index - chunk_size, 0)
                 end = min(index + chunk_size + 1, len(uid_list))
                 uids = uid_list = [x for x in uid_list[begin:end]]
