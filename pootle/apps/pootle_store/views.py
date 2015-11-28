@@ -652,12 +652,12 @@ def get_units(request):
     """
     import time
     start = time.time()
-    old_units = _old_get_units(request)
+    new_units = _get_units_new(request)
     next_time = time.time()
-    new_units = _new_get_units(request)
+    old_units = _get_units_old(request)
     finish = time.time()
-    print "new way took: %s" % finish - next_time
-    print "old way took: %s" % next_time - start
+    print "new way took: %s" % (next_time - start)
+    print "old way took: %s" % (finish - next_time)
     return JSONResponse(old_units)
 
 
