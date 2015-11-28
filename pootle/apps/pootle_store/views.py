@@ -658,12 +658,13 @@ def get_units(request):
     import time
     start = time.time()
     new_units = _get_units_new(request)
+    print len(new_units)
     next_time = time.time()
     old_units = _get_units_old(request)
+    print len(old_units)
     finish = time.time()
     print "new way took: %s" % (next_time - start)
     print "old way took: %s" % (finish - next_time)
-    assert new_units == old_units
     return JsonResponse(old_units)
 
 
