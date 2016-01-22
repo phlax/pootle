@@ -62,7 +62,7 @@ def site_matrix_with_vfolders(site_matrix):
     vfolder3.save()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def site_root(request, system, settings):
 
     from pytest_pootle.factories import (
@@ -102,7 +102,7 @@ def site_root(request, system, settings):
     request.addfinalizer(_teardown)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def site_matrix(site_root):
     from pootle_project.models import Project
     from pootle_language.models import Language

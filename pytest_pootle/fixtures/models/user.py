@@ -51,7 +51,7 @@ def default(transactional_db):
                          password='')
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def system(db):
     """Require the system user."""
     return _require_user('system', 'system user')
