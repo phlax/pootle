@@ -27,6 +27,9 @@ assets:
 	python manage.py assets build ${TAIL}
 	chmod 664 ${ASSETS_DIR}.webassets-cache/*
 
+travis-assets:
+	if [ -d "${ASSETS_DIR}.webassets-cache/" ]; then echo "eating cache - yum!"; else make assets; fi
+
 docs:
 	# Make sure that the submodule with docs theme is pulled and up-to-date.
 	git submodule update --init
