@@ -15,13 +15,14 @@ from django.core.urlresolvers import reverse_lazy
 ADMIN_URL = reverse_lazy('pootle-admin')
 
 
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.django_db
 def test_admin_not_logged_in(client):
     """Checks logged-out users cannot access the admin site."""
     response = client.get(ADMIN_URL)
     assert response.status_code == 403
 
 
+@pytest.mark.django_db
 def test_admin_regular_user(client, default):
     """Checks regular users cannot access the admin site."""
     client.login(username=default.username, password='')

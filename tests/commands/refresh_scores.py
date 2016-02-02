@@ -13,13 +13,13 @@ from django.core.management import call_command
 
 @pytest.mark.cmd
 @pytest.mark.django_db
-def test_refresh_scores_recalculate(site_matrix):
+def test_refresh_scores_recalculate():
     """Recalculate scores."""
     call_command('refresh_scores')
 
 
 @pytest.mark.cmd
 @pytest.mark.django_db
-def test_refresh_scores_reset(site_matrix):
+def test_refresh_scores_reset():
     """Set scores to zero"""
     call_command('refresh_scores', '--reset')

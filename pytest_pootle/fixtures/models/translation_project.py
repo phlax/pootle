@@ -14,7 +14,9 @@ def _require_tp(language, project):
     """Helper to get/create a new translation project."""
     from pootle_translationproject.models import create_translation_project
 
-    return create_translation_project(language, project)
+    tp = create_translation_project(language, project)
+    tp.save()
+    return tp
 
 
 def _require_tp_with_obsolete_dir(language, project):

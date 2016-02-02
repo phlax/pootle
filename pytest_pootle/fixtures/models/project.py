@@ -29,7 +29,7 @@ def _require_project(code, name, source_language, **kwargs):
 
 
 @pytest.fixture
-def tutorial(projects, english):
+def tutorial(projects, english, system):
     """Require `tutorial` test project."""
     return _require_project('tutorial', 'Tutorial', english)
 

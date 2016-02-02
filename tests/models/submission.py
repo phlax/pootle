@@ -37,6 +37,8 @@ def _create_comment_submission(unit, user, creation_time, comment):
 def test_submission_ordering(en_tutorial_po, member):
     """Submissions with same creation_time should order by pk
     """
+    Submission.objects.all().delete()
+
     at_time = timezone.now()
     unit = en_tutorial_po.units[0]
     _create_comment_submission(unit, member, at_time, "Comment 3")

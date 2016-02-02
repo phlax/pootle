@@ -10,25 +10,27 @@
 import pytest
 
 
-@pytest.fixture
-def root(transactional_db, system):
+@pytest.fixture(scope="session")
+def root(system):
     """Require the root directory."""
     from pootle_app.models import Directory
-
-    if "root" in Directory.objects.__dict__:
-        del Directory.objects.__dict__['root']
-    root, created = Directory.objects.get_or_create(name='')
-    return root
+    return Directory.objects.get(pootle_path="/")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def projects(root):
     """Require the projects directory."""
     from pootle_app.models import Directory
+    return Directory.objects.get(pootle_path="/projects/")
 
-    if "projects" in Directory.objects.__dict__:
-        del Directory.objects.__dict__['projects']
+    from pootle_app.models import Directory
 
-    projects, created = Directory.objects.get_or_create(name='projects',
-                                                        parent=root)
+    dirs = Directory.objects
+
+    if "projects" in dirs.__dict__:
+        del dirs.__dict__['projects']
+
+    projects, created = dirs.get_or_create(name='projects',
+                                           parent=root)
+    projects.save()
     return projects

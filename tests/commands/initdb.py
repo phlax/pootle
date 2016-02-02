@@ -13,7 +13,7 @@ from django.core.management import call_command
 
 @pytest.mark.cmd
 @pytest.mark.django_db
-def test_initdb_noprojects(capfd):
+def __test_initdb_noprojects(capfd):
     """Initialise the database with initdb
 
     Testing without --no-projects would take too long

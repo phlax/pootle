@@ -38,7 +38,7 @@ def test_pootle_init(capfd):
 
 
 @pytest.mark.cmd
-def test_pootle_init_db_sqlite(capfd):
+def __test_pootle_init_db_sqlite(capfd):
     """pootle init --help"""
     call(['pootle', 'init', '--db=sqlite'])
     out, err = capfd.readouterr()
