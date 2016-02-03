@@ -17,6 +17,14 @@ matrix:
   allow_failures:
     - env: TOXENV=isort
 before_cache:
+  - rm -f .tox/*/lib/python*/site-packages/.coverage
+  - rm -f .tox/*/log/*.log
+  - rm -f .tox/log/tox*.log
+  - rm -f .tox/docs/log/docs*.log
+  - rm -f .tox/eslint/log/eslint*.log
+  - rm -f .tox/isort/log/isort*.log
+  - rm -f .tox/dist/Pootle*.zip
+  - rm -f $HOME/.cache/pip/log/debug.log
   - pyclean .
 cache:
   directories:
