@@ -16,6 +16,8 @@ env:
 matrix:
   allow_failures:
     - env: TOXENV=isort
+before_cache:
+  - pyclean .
 cache:
   directories:
     - pootle/static/js/node_modules
