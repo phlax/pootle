@@ -11,6 +11,8 @@ from fnmatch import translate
 from django.utils.functional import cached_property
 
 from pootle.core.exceptions import MissingPluginError, NotConfiguredError
+from pootle_language.models import Language
+from pootle_project.models import Project
 
 from .delegate import fs_plugins
 
@@ -74,7 +76,8 @@ class FSPlugin(object):
         fs_type = project.config.get("pootle_fs.fs_type")
         fs_url = project.config.get("pootle_fs.fs_url")
         if not fs_type or not fs_url:
-            raise NotConfiguredError()
+            raise NotConfiguredError(
+                "Project must have both fs_type and fs_url configured")
         try:
             self.plugin = plugins[fs_type](self.project)
         except KeyError:
@@ -103,3 +106,58 @@ def parse_fs_url(fs_url):
             fs_type = chunks[0]
             fs_url = chunks[1]
     return fs_type, fs_url
+
+
+class FSProject(object):
+    """Create and sync a new project using FS configuration"""
+
+    def __init__(self, code, fs_type, fs_url, filetype="po", name=None,
+                 checkstyle="standard", source_language="en",
+                 translation_path="/<language_code>/<filename>.<ext>"):
+        self.code = code
+        self.fs_type = fs_type
+        self.fs_url = fs_url
+        self.name = name
+        self.filetype = filetype
+        self.checkstyle = checkstyle
+        self._source_language = source_language
+        self.translation_path = translation_path
+
+    @property
+    def exists(self):
+        try:
+            Project.objects.get(code=self.code)
+            return True
+        except Project.DoesNotExist:
+            return False
+
+    @property
+    def source_language(self):
+        return Language.objects.get(code=self._source_language)
+
+    @property
+    def fullname(self):
+        return self.name or self.code.capitalize()
+
+    @cached_property
+    def project(self):
+        project, __ = Project.objects.get_or_create(
+            code=self.code,
+            fullname=self.fullname,
+            localfiletype=self.filetype,
+            treestyle='none',
+            checkstyle=self.checkstyle,
+            source_language=self.source_language)
+        project.config["pootle_fs.fs_type"] = self.fs_type
+        project.config["pootle_fs.fs_url"] = self.fs_url
+        project.config["pootle_fs.translation_paths"] = dict(
+            default=self.translation_path)
+        return project
+
+    @cached_property
+    def plugin(self):
+        return FSPlugin(self.project)
+
+    def sync(self):
+        self.plugin.fetch()
+        self.plugin.sync()
