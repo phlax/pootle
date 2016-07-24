@@ -24,7 +24,7 @@ const ProjectForm = React.createClass({
 
   mixins: [ModelFormMixin],
 
-  fields: ['code', 'fullname', 'checkstyle', 'localfiletype', 'treestyle',
+  fields: ['code', 'fullname', 'checkstyle', 'localfiletype', 'filetypes', 'treestyle',
            'source_language', 'ignoredfiles', 'report_email',
            'screenshot_search_prefix', 'disabled'],
 
@@ -85,6 +85,17 @@ const ProjectForm = React.createClass({
             name="localfiletype"
             errors={errors.localfiletype}
             value={formData.localfiletype}
+          />
+          <FormElement
+            type="select"
+            multiple
+            clearable={false}
+            options={model.getFieldChoices('filetypes')}
+            label={gettext('Filetypes')}
+            handleChange={this.handleChange}
+            name="filetypes"
+            errors={errors.filetypes}
+            value={formData.filetypes}
           />
           <FormElement
             type="select"

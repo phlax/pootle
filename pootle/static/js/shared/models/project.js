@@ -14,16 +14,18 @@ import AdminAPIMixin from 'mixins/admin_api';
 
 export const Project = Backbone.Model.extend({
 
-  defaults: {
-    code: '',
-    fullname: '',
-    checkstyle: 'standard',
-    localfiletype: 'po',
-    treestyle: 'auto',
-    source_language: '',
-    ignoredfiles: '',
-    screenshot_search_prefix: '',
-    disabled: false,
+  defaults() {
+    return {
+      code: '',
+      fullname: '',
+      checkstyle: 'standard',
+      treestyle: 'auto',
+      source_language: '',
+      ignoredfiles: '',
+      filetypes: [],
+      screenshot_search_prefix: '',
+      disabled: false,
+    };
   },
 
   urlRoot() {
