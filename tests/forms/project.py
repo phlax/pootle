@@ -16,12 +16,13 @@ from pootle_store.filetypes import filetype_choices
 
 @pytest.mark.parametrize('reserved_code', RESERVED_PROJECT_CODES)
 @pytest.mark.django_db
-def test_clean_code_invalid(reserved_code):
+def test_clean_code_invalid(reserved_code, format_registry):
     form_data = {
         'code': reserved_code,
         'checkstyle': PROJECT_CHECKERS.keys()[0],
         'fullname': 'Foo',
         'localfiletype': filetype_choices[0][0],
+        'filetypes': [format_registry["po"]["pk"]],
         'source_language': 1,
         'treestyle': Project.treestyle_choices[0][0],
     }
@@ -32,12 +33,13 @@ def test_clean_code_invalid(reserved_code):
 
 
 @pytest.mark.django_db
-def test_clean_localfiletype_invalid():
+def test_clean_localfiletype_invalid(format_registry):
     form_data = {
         'code': 'foo',
         'checkstyle': PROJECT_CHECKERS.keys()[0],
         'fullname': 'Foo',
         'localfiletype': 'invalid_filetype',
+        'filetypes': [format_registry["po"]["pk"]],
         'source_language': 1,
         'treestyle': Project.treestyle_choices[0][0],
     }
