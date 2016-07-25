@@ -1961,13 +1961,8 @@ class Store(models.Model, CachedTreeItem, base.TranslationStore):
         self.save()
 
     def get_file_class(self):
-        try:
-            return self.translation_project.project.get_file_class()
-        except ObjectDoesNotExist:
-            if self.name:
-                name, ext = os.path.splitext(self.name)
-                return factory_classes[ext]
-        return factory_classes['po']
+        if self.filetype:
+            return factory_classes[str(self.filetype.extension)]
 
     def convert(self, fileclass):
         """export to fileclass"""
@@ -2089,14 +2084,15 @@ class Store(models.Model, CachedTreeItem, base.TranslationStore):
             'fuzzy': 0
         }
 
-        # only count files with an ext matching the project ext
-        proj_ext = "." + self.translation_project.project.localfiletype
-
         # XXX: `order_by()` here is important as it removes the default
         # ordering for units. See #3897 for reference.
-        res = self.units.filter(store__name__endswith=proj_ext) \
-                        .order_by().values('state') \
-                        .annotate(wordcount=models.Sum('source_wordcount'))
+        filetype_ids = self.translation_project.project.filetypes.values_list(
+            "pk", flat=True)
+        res = (
+            self.units.filter(store__filetype_id__in=filetype_ids)
+                      .exclude(store__is_template=True)
+                      .order_by().values('state')
+                      .annotate(wordcount=models.Sum('source_wordcount')))
         for item in res:
             ret['total'] += item['wordcount']
             if item['state'] == TRANSLATED:
