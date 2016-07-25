@@ -46,6 +46,7 @@ from pootle.core.utils import dateformat
 from pootle.core.utils.aggregate import max_column
 from pootle.core.utils.timezone import datetime_min, make_aware
 from pootle_app.models import Directory
+from pootle_format.models import Format
 from pootle_misc.checks import check_names, get_checker
 from pootle_misc.util import import_func
 from pootle_statistics.models import (Submission, SubmissionFields,
@@ -1341,6 +1342,13 @@ class Store(models.Model, CachedTreeItem, base.TranslationStore):
     translation_project = models.ForeignKey(translation_project_fk,
                                             related_name='stores',
                                             db_index=True, editable=False)
+
+    filetype = models.ForeignKey(
+        Format,
+        related_name='stores',
+        null=True, blank=True,
+        db_index=True)
+    is_template = models.BooleanField(default=False)
 
     # any changes to the `pootle_path` field may require updating the schema
     # see migration 0007_case_sensitive_schema.py
