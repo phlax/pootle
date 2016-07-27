@@ -184,18 +184,21 @@ def test_get_resource_project(rf, default, tutorial, afrikaans_tutorial,
     func(request, tutorial, '', store_name)
     assert isinstance(request.resource_obj, ProjectResource)
 
-    # Two languages had this file, but it was marked as obsolete for the Arabic
-    # language!
-    # Should only contain a single file resource
-    assert len(request.resource_obj.resources) == 1
+    # Arabic Store should not appear in the object_resources,
+    # as its obsolete
+    assert (
+        "ar" not in request.resource_obj.resources.values_list(
+            "translation_project__language__code", flat=True))
     assert isinstance(request.resource_obj.resources[0], Store)
 
     # Project, cross-language directory resource
     func(request, tutorial, subdir_name, '')
     assert isinstance(request.resource_obj, ProjectResource)
 
-    # Two languages have this dir, but it was marked as obsolete for the Arabic
-    # language!
-    # Should only contain a single dir resource
-    assert len(request.resource_obj.resources) == 1
     assert isinstance(request.resource_obj.resources[0], Directory)
+
+    # Arabic Store should not appear in the object_resources,
+    # as its obsolete
+    assert (
+        "ar" not in request.resource_obj.resources.values_list(
+            "translationproject__language__code", flat=True))
