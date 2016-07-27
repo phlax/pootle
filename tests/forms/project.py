@@ -39,11 +39,11 @@ def test_clean_localfiletype_invalid(format_registry):
         'checkstyle': PROJECT_CHECKERS.keys()[0],
         'fullname': 'Foo',
         'localfiletype': 'invalid_filetype',
-        'filetypes': [format_registry["po"]["pk"]],
+        'filetypes': ["NO_SUCH_FORMAT"],
         'source_language': 1,
         'treestyle': Project.treestyle_choices[0][0],
     }
     form = ProjectForm(form_data)
     assert not form.is_valid()
-    assert 'localfiletype' in form.errors
+    assert 'filetypes' in form.errors
     assert len(form.errors.keys()) == 1
