@@ -47,6 +47,7 @@ from pootle.core.utils.aggregate import max_column
 from pootle.core.utils.timezone import datetime_min, make_aware
 from pootle_app.models import Directory
 from pootle_format.models import Format
+from pootle_format.utils import ProjectFiletypes
 from pootle_misc.checks import check_names, get_checker
 from pootle_misc.util import import_func
 from pootle_statistics.models import (Submission, SubmissionFields,
@@ -1275,6 +1276,23 @@ class StoreManager(models.Manager):
         """Filters non-obsolete stores."""
         return self.filter(obsolete=False)
 
+    def create(self, *args, **kwargs):
+        if "filetype" not in kwargs:
+            filetypes = ProjectFiletypes(kwargs["translation_project"].project)
+            kwargs['filetype'] = filetypes.choose_filetype(kwargs["name"])
+        kwargs["pootle_path"] = (
+            "%s%s"
+            % (kwargs["parent"].pootle_path, kwargs["name"]))
+        return super(StoreManager, self).create(*args, **kwargs)
+
+    def get_or_create(self, *args, **kwargs):
+        store, created = super(StoreManager, self).get_or_create(*args, **kwargs)
+        if created and "filetype" not in kwargs:
+            filetypes = ProjectFiletypes(store.translation_project.project)
+            store.filetype = filetypes.choose_filetype(store.name)
+            store.save()
+        return store, created
+
     def create_by_path(self, pootle_path, project=None,
                        create_tp=True, create_directory=True, **kwargs):
         from pootle_language.models import Language
@@ -1290,10 +1308,7 @@ class StoreManager(models.Manager):
         elif project.code != proj_code:
             raise ValueError(
                 "Project must match pootle_path when provided")
-        valid_ext = [
-            project.localfiletype,
-            project.get_template_filetype()]
-        if ext not in valid_ext:
+        if ext not in ProjectFiletypes(project).valid_extensions:
             raise ValueError(
                 "'%s' is not a valid extension for this Project"
                 % ext)
