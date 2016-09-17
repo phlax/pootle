@@ -282,7 +282,6 @@ class Directory(models.Model, CachedTreeItem):
             return translation_project.real_path + path_prefix
 
     def delete(self, *args, **kwargs):
-        self.clear_all_cache(parents=False, children=False)
 
         self.initialize_children()
         for item in self.children:
@@ -299,4 +298,3 @@ class Directory(models.Model, CachedTreeItem):
 
         self.obsolete = True
         self.save()
-        self.clear_all_cache(parents=False, children=False)
