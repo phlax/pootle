@@ -7,13 +7,8 @@
 # AUTHORS file for copyright and authorship information.
 
 import logging
-from datetime import datetime
-from functools import wraps
-
-from django.utils.encoding import iri_to_uri
 
 from pootle.core.cache import get_cache
-from pootle.core.url_helpers import get_all_pootle_paths
 
 
 __all__ = ('TreeItem', 'CachedTreeItem', 'CachedMethods')
@@ -21,18 +16,6 @@ __all__ = ('TreeItem', 'CachedTreeItem', 'CachedMethods')
 
 logger = logging.getLogger('stats')
 cache = get_cache('stats')
-
-
-def statslog(function):
-    @wraps(function)
-    def _statslog(instance, *args, **kwargs):
-        start = datetime.now()
-        result = function(instance, *args, **kwargs)
-        end = datetime.now()
-        logger.info("%s(%s)\t%s\t%s", function.__name__, ', '.join(args),
-                    end - start, instance.get_cachekey())
-        return result
-    return _statslog
 
 
 class NoCachedStats(Exception):
@@ -101,38 +84,3 @@ class CachedTreeItem(TreeItem):
         super(CachedTreeItem, self).__init__()
 
     # # # # # # #  Update stats in Redis Queue Worker process # # # # # # # #
-
-    def all_pootle_paths(self):
-        """Get cache_key for all parents (to the Language and Project)
-        of current TreeItem
-        """
-        return get_all_pootle_paths(self.get_cachekey())
-
-    def can_be_updated(self):
-        """This method will be overridden in descendants"""
-        return True
-
-    def set_cached_value(self, name, value):
-        key = iri_to_uri(self.get_cachekey() + ":" + name)
-        return cache.set(key, value, None)
-
-    def get_cached_value(self, name):
-        key = iri_to_uri(self.get_cachekey() + ":" + name)
-        return cache.get(key)
-
-    @statslog
-    def update_cached(self, name):
-        """calculate stat value and update cached value"""
-        self.set_cached_value(name, self._calc(name))
-
-    def get_cached(self, name):
-        """get stat value from cache"""
-        result = self.get_cached_value(name)
-        if result is None:
-
-            msg = u"cache miss %s for %s(%s)" % (name, self.get_cachekey(),
-                                                 self.__class__)
-            logger.info(msg)
-            raise NoCachedStats(msg)
-
-        return result
