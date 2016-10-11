@@ -46,6 +46,10 @@
     </div>
     <div class="config-content">
       <div class="config-content-panel">
+	<h3>{% blocktrans with project_code=project.code %}Public key{% endblocktrans %}</h3>
+	<code>{{ public_key }}</code>
+      </div>
+      <div class="config-content-panel">
 	<h3>{% blocktrans with project_code=project.code %}Language mapping configuration{% endblocktrans %}</h3>
 
 	<form method="post" action___="{{ lang_mapping_formset_action }}">
@@ -75,10 +79,6 @@
 	  </table>
 	</form>
       </div>
-    </div>
-    <div class="config-content">
-      Language mapping configuration
-      
     </div>
   </div>
 </div>
