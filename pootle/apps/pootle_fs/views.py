@@ -6,6 +6,11 @@
 # or later license. See the LICENSE file for a copy of the license and the
 # AUTHORS file for copyright and authorship information.
 
+import getpass
+import os
+import pwd
+
+
 from django.core.urlresolvers import reverse
 
 from pootle.core.views.admin import PootleAdminFormView
@@ -22,6 +27,11 @@ class ProjectFSAdminView(PootleAdminFormView):
         context = super(ProjectFSAdminView, self).get_context_data(**kwargs)
         context["project"] = self.project
         context["lang_mapping_formset"] = self.get_lang_mapping_formset()
+        publickeyfile = os.path.join(
+            pwd.getpwnam(getpass.getuser()).pw_dir, ".ssh", "id_rsa.pub")
+        if os.path.exists(publickeyfile):
+            with open(publickeyfile, "rb") as pkf:
+                context["public_key"] = pkf.read()
         return context
 
     def get_lang_mapping_formset(self):
