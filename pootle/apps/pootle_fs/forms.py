@@ -6,10 +6,13 @@
 # or later license. See the LICENSE file for a copy of the license and the
 # AUTHORS file for copyright and authorship information.
 
+from collections import Counter, OrderedDict
+
 from django import forms
 from django.utils.functional import cached_property
 
 from pootle.i18n.gettext import ugettext_lazy as _
+from pootle_language.models import Language
 
 from .delegate import (
     fs_plugins, fs_translation_path_validator, fs_url_validator)
@@ -19,7 +22,9 @@ class ProjectFSAdminForm(forms.Form):
     fs_type = forms.ChoiceField(
         label=_("Filesystem backend"),
         help_text=_("Select a backend filesystem"),
-        choices=())
+        choices=(),
+        widget=forms.Select(
+            attrs={'class': 'js-select2'}))
     fs_url = forms.CharField(
         label=_("Backend URL or path"),
         help_text=_(
@@ -90,3 +95,56 @@ class ProjectFSAdminForm(forms.Form):
         self.project.config["pootle_fs.fs_url"] = self.cleaned_data["fs_url"]
         self.project.config["pootle_fs.translation_paths"] = dict(
             default=self.cleaned_data["translation_path"])
+
+
+class LangMappingForm(forms.Form):
+    remove = forms.BooleanField(required=False)
+    pootle_code = forms.ModelChoiceField(
+        Language.objects.all(),
+        to_field_name="code",
+        widget=forms.Select(
+            attrs={'class': 'js-select2'}))
+    fs_code = forms.CharField(
+        label=_("Filesystem code"), max_length=32)
+
+
+class BaseLangMappingFormSet(forms.BaseFormSet):
+
+    def __init__(self, *args, **kwargs):
+        self.project = kwargs.pop("project")
+        mappings = self.project.config.get("pootle.core.lang_mappings", {})
+        kwargs["initial"] = [
+            dict(pootle_code=k, fs_code=v)
+            for k, v in mappings.items()]
+        super(BaseLangMappingFormSet, self).__init__(*args, **kwargs)
+
+    @property
+    def cleaned_mapping(self):
+        mapping = OrderedDict()
+        for mapped in self.cleaned_data:
+            if not mapped or mapped["remove"]:
+                continue
+            mapping[mapped["pootle_code"].code] = mapped["fs_code"]
+        return mapping
+
+    def save(self):
+        self.project.config["pootle.core.lang_mappings"] = self.cleaned_mapping
+
+    def clean(self):
+        """Checks that no two articles have the same title."""
+        if any(self.errors):
+            # Don't bother validating the formset unless
+            # each form is valid on its own
+            return
+        fs_counter = Counter([v["fs_code"] for v in self.cleaned_data if v])
+        if set(fs_counter.values()) != set([1]):
+            raise forms.ValidationError(
+                "Filesystem language codes must be unique")
+        pootle_counter = Counter([v["pootle_code"] for v in self.cleaned_data if v])
+        if set(pootle_counter.values()) != set([1]):
+            raise forms.ValidationError(
+                "Pootle language mappings must be unique")
+
+LangMappingFormSet = forms.formset_factory(
+    LangMappingForm,
+    formset=BaseLangMappingFormSet)
