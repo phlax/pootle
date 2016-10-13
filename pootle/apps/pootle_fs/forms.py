@@ -11,8 +11,12 @@ from collections import Counter, OrderedDict
 from django import forms
 from django.utils.functional import cached_property
 
+from pootle.core.forms import FormtableForm
+from pootle.core.views.widgets import TableSelectMultiple
 from pootle.i18n.gettext import ugettext_lazy as _
 from pootle_language.models import Language
+from pootle_fs.utils import FSPlugin
+from pootle_translationproject.models import TranslationProject
 
 from .delegate import (
     fs_plugins, fs_translation_mapping_validator, fs_url_validator)
@@ -69,7 +73,6 @@ class ProjectFSAdminForm(forms.Form):
         self.project = kwargs.pop("project")
         super(ProjectFSAdminForm, self).__init__(*args, **kwargs)
         self.fields["fs_type"].choices = self.fs_type_choices
-
         self.fields["fs_url"].initial = self.project.config.get("pootle_fs.fs_url")
         self.fields["fs_type"].initial = (
             self.project.config.get("pootle_fs.fs_type"))
@@ -193,3 +196,179 @@ class BaseLangMappingFormSet(forms.BaseFormSet):
 LangMappingFormSet = forms.formset_factory(
     LangMappingForm,
     formset=BaseLangMappingFormSet)
+
+
+class ProjectFSStateBaseForm(FormtableForm):
+    form_class = "pootle-fs-config-form"
+    filter_state = forms.ChoiceField(
+        choices=(),
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'js-select2'}))
+    filter_language = forms.ModelChoiceField(
+        queryset=TranslationProject.objects.none(),
+        required=False,
+        widget=forms.Select(
+            attrs={'class': 'js-select2'}))
+
+    def __init__(self, *args, **kwargs):
+        self.project = kwargs.pop("project")
+        super(ProjectFSStateBaseForm, self).__init__(*args, **kwargs)
+        self.fields["filter_state"].choices = getattr(self, "state_choices", ())
+        self.fields["filter_language"].queryset = (
+            self.project.translationproject_set.all())
+
+    @property
+    def fs(self):
+        return FSPlugin(self.project)
+
+    @property
+    def items_to_save(self):
+        return (
+            [x[0] for x in self.fields[self.search_field].queryset]
+            if self.cleaned_data["select_all"]
+            else self.cleaned_data[self.search_field])
+
+    @cached_property
+    def state(self):
+        return self.fs.state()
+
+    def count_choices(self, choices):
+        return len(choices)
+
+    def search(self):
+        if not self.is_valid():
+            return self.fields[self.paginate_field].choices
+        choices = []
+        tp = (
+            self.cleaned_data["filter_language"]
+            if self.cleaned_data.get("filter_language")
+            else None)
+        state = (
+            self.cleaned_data["filter_state"]
+            if self.cleaned_data.get("filter_state")
+            else None)
+        for path, choice in self.fields[self.paginate_field].choices:
+            if tp and not choice.pootle_path.startswith(tp.pootle_path):
+                continue
+            if state and not choice.state_type == state:
+                continue
+            choices.append((path, choice))
+        return choices
+
+
+class ProjectFSStateUntrackedForm(ProjectFSStateBaseForm):
+    search_field = "untracked"
+    paginate_field = "untracked"
+    action_choices = (
+        ("rm", "Remove both Pootle and filesystem store"),
+        ("fetch", "Fetch the version from the Filesystem"),
+        ("add", "Add the version from Pootle"))
+    untracked = forms.MultipleChoiceField(
+        required=False,
+        widget=TableSelectMultiple(
+            item_attrs=["pootle_path", "fs_path", "state_type"]),
+        choices=[])
+
+    def __init__(self, *args, **kwargs):
+        super(ProjectFSStateUntrackedForm, self).__init__(*args, **kwargs)
+        self.fields["untracked"].choices = [
+            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
+            for assoc in self.state_untracked]
+
+    @property
+    def state_choices(self):
+        return (
+            ("", ""),
+            ("conflict_untracked", _("Untracked conflicting")),
+            ("pootle_untracked", _("Untracked Pootle stores")),
+            ("fs_untracked", _("Untracked files")))
+
+    @property
+    def state_untracked(self):
+        return (
+            self.state["conflict_untracked"]
+            + self.state["pootle_untracked"]
+            + self.state["fs_untracked"])
+
+    def save(self):
+        for item in self.items_to_save:
+            # TODO: check still in same state?
+            # state_type = item.split("/")[0]
+            pootle_path = "/".join(item.split("/")[1:])
+            pootle_path = "/%s" % pootle_path
+            self.fs.rm(pootle_path=pootle_path, force=True)
+
+
+class ProjectFSStateUnsyncedForm(ProjectFSStateBaseForm):
+    search_field = "unsynced"
+    paginate_field = "unsynced"
+    action_choices = (
+        ("unstage", "Unstage any actions"),
+        ("sync", "Synchronize Pootle and the filesystem now"))
+    unsynced = forms.MultipleChoiceField(
+        required=False,
+        widget=TableSelectMultiple(
+            item_attrs=["pootle_path", "fs_path", "state_type"]),
+        choices=[])
+
+    def __init__(self, *args, **kwargs):
+        super(ProjectFSStateUnsyncedForm, self).__init__(*args, **kwargs)
+        self.fields["unsynced"].choices = [
+            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
+            for assoc in self.state_unsynced]
+
+    @property
+    def state_choices(self):
+        return (
+            ("", ""),
+            ("remove", _("Files marked for removal")),
+            ("pootle_ahead", _("Update from pootle")),
+            ("fs_ahead", _("Update from filesystem")))
+
+    @property
+    def state_unsynced(self):
+        return (
+            self.state["remove"]
+            + self.state["pootle_ahead"]
+            + self.state["fs_ahead"])
+
+    def save(self):
+        for item in self.items_to_save:
+            # TODO: check still in same state?
+            # state_type = item.split("/")[0]
+            pootle_path = "/".join(item.split("/")[1:])
+            pootle_path = "/%s" % pootle_path
+            if self.cleaned_data["actions"] == "unstage":
+                self.fs.unstage(pootle_path=pootle_path)
+
+
+class ProjectFSStateConflictingForm(ProjectFSStateBaseForm):
+    search_field = "conflicting"
+    action_choices = (
+        ("unstage", "Unstage any actions"),
+        ("sync", "Synchronize Pootle and the filesystem now"))
+    paginate_field = "conflicting"
+    conflicting = forms.MultipleChoiceField(
+        required=False,
+        widget=TableSelectMultiple(
+            item_attrs=["pootle_path", "fs_path", "state_type"]),
+        choices=[])
+
+    def __init__(self, *args, **kwargs):
+        super(ProjectFSStateConflictingForm, self).__init__(*args, **kwargs)
+        self.fields["conflicting"].choices = [
+            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
+            for assoc in self.state_conflicting]
+
+    @property
+    def state_conflicting(self):
+        return self.state["conflict"]
+
+    def save(self):
+        for item in self.items_to_save:
+            # TODO: check still in same state?
+            # state_type = item.split("/")[0]
+            pootle_path = "/".join(item.split("/")[1:])
+            pootle_path = "/%s" % pootle_path
+            self.fs.rm(pootle_path=pootle_path, force=True)
