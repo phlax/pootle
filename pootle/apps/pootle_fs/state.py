@@ -14,6 +14,8 @@ from django.db.models import Q
 from django.utils.functional import cached_property
 from django.utils.lru_cache import lru_cache
 
+from pootle.core.decorators import persistent_property
+from pootle.core.models import Revision
 from pootle.core.state import ItemState, State
 from pootle_project.models import Project
 from pootle_store.constants import POOTLE_WINS, SOURCE_WINS
@@ -150,6 +152,16 @@ class ProjectFSState(State):
             context, fs_path=fs_path, pootle_path=pootle_path,
             load=load)
 
+    @cached_property
+    def cache_key(self):
+        latest_hash = self.context.latest_hash
+        if latest_hash is None:
+            return
+        return (
+            "%s/%s"
+            % (Revision.get(),
+               latest_hash))
+
     @property
     def project(self):
         return self.context.project
@@ -177,12 +189,13 @@ class ProjectFSState(State):
                     pootle_path=store_fs.pootle_path,
                     fs_path=store_fs.path)
 
-    @property
+    @persistent_property
     def state_fs_untracked(self):
         tracked_fs_paths = self.resources.tracked_paths.keys()
         tracked_pootle_paths = self.resources.tracked_paths.values()
         trackable_fs_paths = self.resources.trackable_store_paths.values()
         trackable_pootle_paths = self.resources.trackable_store_paths.keys()
+        result = []
         for pootle_path, fs_path in self.resources.found_file_matches:
             fs_untracked = (
                 fs_path not in tracked_fs_paths
@@ -190,25 +203,30 @@ class ProjectFSState(State):
                 and fs_path not in trackable_fs_paths
                 and pootle_path not in trackable_pootle_paths)
             if fs_untracked:
-                yield dict(
-                    pootle_path=pootle_path,
-                    fs_path=fs_path)
+                result.append(
+                    dict(pootle_path=pootle_path,
+                         fs_path=fs_path))
+        return result
 
-    @property
+    @persistent_property
     def state_pootle_untracked(self):
+        result = []
         for store, path in self.resources.trackable_stores:
             if path not in self.resources.found_file_paths:
-                yield dict(
-                    store=store,
-                    fs_path=path)
+                result.append(
+                    dict(store=store,
+                         fs_path=path))
+        return result
 
-    @property
+    @persistent_property
     def state_conflict_untracked(self):
+        result = []
         for store, path in self.resources.trackable_stores:
             if path in self.resources.found_file_paths:
-                yield dict(
-                    store=store,
-                    fs_path=path)
+                result.append(
+                    dict(store=store,
+                         fs_path=path))
+        return result
 
     @property
     def state_remove(self):
@@ -254,8 +272,9 @@ class ProjectFSState(State):
                 pootle_path=pootle_path,
                 fs_path=path)
 
-    @property
+    @persistent_property
     def state_fs_ahead(self):
+        result = []
         fs_changed = (
             self.resources.synced
                           .exclude(path__in=self.resources.missing_file_paths))
@@ -267,10 +286,11 @@ class ProjectFSState(State):
                     not pootle_changed
                     or store_fs.resolve_conflict == SOURCE_WINS))
             if fs_ahead:
-                yield dict(
-                    store_fs=store_fs.pk,
-                    pootle_path=store_fs.pootle_path,
-                    fs_path=store_fs.path)
+                result.append(
+                    dict(store_fs=store_fs.pk,
+                         pootle_path=store_fs.pootle_path,
+                         fs_path=store_fs.path))
+        return result
 
     @property
     def state_fs_removed(self):
