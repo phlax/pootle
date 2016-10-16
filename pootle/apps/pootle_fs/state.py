@@ -156,6 +156,23 @@ class ProjectFSState(State):
     def cache_key(self):
         return self.context.cache_key
 
+    def filter(self, fs_path=None, pootle_paths=None, states=None):
+        filtered = copy(self)
+        for k in self.states:
+            if states and k not in states:
+                self.__state__[k] = []
+            current = filtered[k]
+            target = []
+            for item in current:
+                if item.pootle_path in pootle_paths or []:
+                    target.append(item)
+            filtered[k] = target
+        return filtered
+
+    @cached_property
+    def cache_key(self):
+        return self.context.cache_key
+
     @property
     def project(self):
         return self.context.project
