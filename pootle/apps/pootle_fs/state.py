@@ -154,13 +154,7 @@ class ProjectFSState(State):
 
     @cached_property
     def cache_key(self):
-        latest_hash = self.context.latest_hash
-        if latest_hash is None:
-            return
-        return (
-            "%s/%s"
-            % (Revision.get(),
-               latest_hash))
+        return self.context.cache_key
 
     @property
     def project(self):
@@ -198,10 +192,10 @@ class ProjectFSState(State):
         result = []
         for pootle_path, fs_path in self.resources.found_file_matches:
             fs_untracked = (
-                fs_path not in tracked_fs_paths
+                fs_path not in tracked_paths
                 and pootle_path not in tracked_pootle_paths
                 and fs_path not in trackable_fs_paths
-                and pootle_path not in trackable_pootle_paths)
+                and pootle_path not in trackable_store_paths)
             if fs_untracked:
                 result.append(
                     dict(pootle_path=pootle_path,
@@ -211,20 +205,46 @@ class ProjectFSState(State):
     @persistent_property
     def state_pootle_untracked(self):
         result = []
-        for store, path in self.resources.trackable_stores:
-            if path not in self.resources.found_file_paths:
+        trackable_stores = self.trackable_store_paths
+        found_paths = self.found_file_paths
+        for pootle_path in sorted(trackable_stores.keys()):
+            path = trackable_stores[pootle_path]
+            if path not in found_paths:
                 result.append(
-                    dict(store=store,
+                    dict(pootle_path=pootle_path,
                          fs_path=path))
         return result
+
+    @cached_property
+    def trackable_store_paths(self):
+        return self.resources.trackable_store_paths
+
+    @cached_property
+    def found_file_paths(self):
+        return self.resources.found_file_paths
+
+    @cached_property
+    def synced_not_missing_fs(self):
+        return self.resources.synced_not_missing_fs
+
+    @cached_property
+    def synced_missing_fs(self):
+        return self.resources.synced_missing_fs
+
+    @cached_property
+    def unsynced_fs_wins(self):
+        return self.resources.unsynced_fs_wins
 
     @persistent_property
     def state_conflict_untracked(self):
         result = []
-        for store, path in self.resources.trackable_stores:
-            if path in self.resources.found_file_paths:
+        trackable_stores = self.trackable_store_paths
+        found_paths = self.found_file_paths
+        for pootle_path in sorted(trackable_stores.keys()):
+            path = trackable_stores[pootle_path]
+            if path in found_paths:
                 result.append(
-                    dict(store=store,
+                    dict(pootle_path=pootle_path,
                          fs_path=path))
         return result
 
@@ -395,10 +415,6 @@ class ProjectFSState(State):
         return fs_file.pootle_changed, fs_file.fs_changed
 
     def clear_cache(self):
-        for x in dir(self):
-            x = getattr(self, x)
-            if callable(x) and hasattr(x, "cache_clear"):
-                x.cache_clear()
         if "resources" in self.__dict__:
             del self.__dict__["resources"]
         return super(ProjectFSState, self).clear_cache()
