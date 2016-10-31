@@ -13,6 +13,7 @@ import os
 
 from translate.storage.factory import getclass
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.functional import cached_property
 
@@ -54,6 +55,10 @@ class FSFile(object):
 
     def __eq__(self, other):
         return hash(other) == hash(self)
+
+    @property
+    def author_email(self):
+        return getattr(settings, "POOTLE_FS_EMAIL", None)
 
     @property
     def file_exists(self):
@@ -213,6 +218,11 @@ class FSFile(object):
             # Store.update_from_disk
             revision = Revision.get() + 1
         tmp_store = self.deserialize()
+        if not user and self.author_email:
+            try:
+                user = User.objects.get(email=self.author_email)
+            except User.DoesNotExist:
+                pass
         self.store.update(
             tmp_store,
             submission_type=SubmissionTypes.SYSTEM,
