@@ -56,6 +56,22 @@ class Plugin(object):
     def __str__(self):
         return "<%s(%s)>" % (self.__class__.__name__, self.project)
 
+    @cached_property
+    def cache_key(self):
+        project_revision = self.project.directory.revisions.get(
+            key="stats").value
+        latest_hash = self.get_latest_hash()
+        from pootle.core.delegate import revision
+        fs_key = revision.get(
+            self.project.directory.__class__)(self.project.directory).get(key="fs")
+        if latest_hash is None:
+            return
+        return (
+            "projectfs.%s.%s.%s"
+            % (project_revision,
+               fs_key,
+               latest_hash))
+
     @property
     def cache_key(self):
         return (
@@ -107,6 +123,14 @@ class Plugin(object):
         from .models import StoreFS
 
         return StoreFS
+
+    @cached_property
+    def latest_hash(self):
+        return self.get_latest_hash()
+
+    @cached_property
+    def latest_revision(self):
+        return Revision.get()
 
     @cached_property
     def matcher(self):
@@ -196,6 +220,9 @@ class Plugin(object):
           matched paths.
         """
         return self.matcher.matches(fs_path, pootle_path)
+
+    def get_latest_hash(self):
+        return None
 
     def pull(self):
         """
