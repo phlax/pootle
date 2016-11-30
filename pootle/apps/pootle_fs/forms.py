@@ -9,13 +9,19 @@
 from collections import Counter, OrderedDict
 
 from django import forms
+from django.core.cache import cache
 from django.utils.functional import cached_property
+from django.utils.lru_cache import lru_cache
+from django.utils.safestring import mark_safe
 
+from pootle.core.decorators import persistent_property
+from pootle.core.delegate import revision_updater
 from pootle.core.forms import FormtableForm
-from pootle.core.views.widgets import TableSelectMultiple
+from pootle.core.views.widgets import TableRowItem, TableSelectMultiple
 from pootle.i18n.gettext import ugettext_lazy as _
 from pootle_language.models import Language
 from pootle_fs.utils import FSPlugin
+from pootle_project.models import Project
 from pootle_translationproject.models import TranslationProject
 
 from .delegate import (
@@ -31,6 +37,53 @@ FS_CHOICES = (
      _("Django-style"),
      "/locale/<lang_code>/LC_MESSAGES/<filename>.<ext>"),
     ("custom", _("Custom"), ""))
+
+
+STATE_TITLES = dict(
+    (("conflict_untracked",
+      _("Untracked file with matching Pootle store (conflict_untracked)")),
+     ("conflict",
+      _("Pootle store and file have both changed (conflict)")),
+     ("merge_fs_wins",
+      _("Awaiting merge, file wins if there are conflicting units "
+        "(merge_fs_wins)")),
+     ("fs_ahead",
+      _("Awaiting sync, File has changed (fs_ahead)")),
+     ("pootle_ahead",
+      _("Awaiting sync, Pootle store has changed (pootle_ahead)")),
+     ("pootle_untracked",
+      _("Untracked Pootle store (pootle_untracked)")),
+     ("remove",
+      _("Awaiting removal (remove)")),
+     ("up_to_date",
+      _("Up-to-date (up_to_date)")),
+     ("fs_untracked",
+      _("Untracked file (fs_untracked)"))))
+
+
+class StateTableRowItem(TableRowItem):
+
+    @property
+    def title(self):
+        return STATE_TITLES.get(self.value, self.value)
+
+
+class ProjectStates(object):
+
+    @lru_cache()
+    def project_state(self, project_code, cache_key):
+        cached = cache.get("fs.state.%s" % cache_key)
+        if cached:
+            return cached
+        project = Project.objects.get(code=project_code)
+        fs = FSPlugin(project)
+        state = fs.state()
+        from pootle.core.debug import timings
+        with timings():
+            cache.set("fs.state.%s" % cache_key, state)
+        return state
+
+project_states = ProjectStates()
 
 
 class ProjectFSAdminForm(forms.Form):
@@ -218,7 +271,7 @@ class ProjectFSStateBaseForm(FormtableForm):
         self.fields["filter_language"].queryset = (
             self.project.translationproject_set.all())
 
-    @property
+    @cached_property
     def fs(self):
         return FSPlugin(self.project)
 
@@ -229,9 +282,10 @@ class ProjectFSStateBaseForm(FormtableForm):
             if self.cleaned_data["select_all"]
             else self.cleaned_data[self.search_field])
 
-    @cached_property
+    @property
     def state(self):
-        return self.fs.state()
+        return project_states.project_state(
+            self.project.code, self.cache_key)
 
     def count_choices(self, choices):
         return len(choices)
@@ -249,9 +303,9 @@ class ProjectFSStateBaseForm(FormtableForm):
             if self.cleaned_data.get("filter_state")
             else None)
         for path, choice in self.fields[self.paginate_field].choices:
-            if tp and not choice.pootle_path.startswith(tp.pootle_path):
+            if tp and not choice["pootle_path"].startswith(tp.pootle_path):
                 continue
-            if state and not choice.state_type == state:
+            if state and not choice["state_type"].value == state:
                 continue
             choices.append((path, choice))
         return choices
@@ -261,9 +315,11 @@ class ProjectFSStateUntrackedForm(ProjectFSStateBaseForm):
     search_field = "untracked"
     paginate_field = "untracked"
     action_choices = (
-        ("rm", "Remove both Pootle and filesystem store"),
-        ("fetch", "Fetch the version from the Filesystem"),
-        ("add", "Add the version from Pootle"))
+        ("merge_fs", "Add tracking (merge on conflict, fs wins)"),
+        ("merge_pootle", "Add tracking (merge on conflict, Pootle wins)"),
+        ("add_fs", "Add tracking (overwrite Pootle from fs)"),
+        ("add_pootle", "Add tracking (overwrite fs from Pootle)"),
+        ("rm", "Remove both Pootle and filesystem store"))
     untracked = forms.MultipleChoiceField(
         required=False,
         widget=TableSelectMultiple(
@@ -272,32 +328,82 @@ class ProjectFSStateUntrackedForm(ProjectFSStateBaseForm):
 
     def __init__(self, *args, **kwargs):
         super(ProjectFSStateUntrackedForm, self).__init__(*args, **kwargs)
-        self.fields["untracked"].choices = [
-            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
-            for assoc in self.state_untracked]
+        self.fields["untracked"].choices = self.untracked_choices
+
+    @property
+    def cache_key(self):
+        return "pootle.fs.form.untracked.%s" % self.fs.cache_key
+
+    @persistent_property
+    def untracked_choices(self):
+        ks = ["fs_path", "state_type"]
+        result = []
+        for assoc in self.state_untracked:
+            kwargs = {k: getattr(assoc, k) for k in ks}
+            if assoc.state_type in ["pootle_untracked", "conflict_untracked"]:
+                kwargs["pootle_path"] = mark_safe(
+                    '<a href="%s" target="_blank">%s</a>'
+                    % (assoc.pootle_path, assoc.pootle_path))
+            else:
+                kwargs["pootle_path"] = assoc.pootle_path
+            kwargs["class"] = kwargs["state_type"].replace("_", "-")
+            kwargs["state_type"] = StateTableRowItem(kwargs["state_type"])
+            result.append(("%s%s" % (assoc.state_type, assoc.pootle_path), kwargs))
+        return result
 
     @property
     def state_choices(self):
         return (
             ("", ""),
-            ("conflict_untracked", _("Untracked conflicting")),
-            ("pootle_untracked", _("Untracked Pootle stores")),
-            ("fs_untracked", _("Untracked files")))
+            ("conflict_untracked", STATE_TITLES.get("conflict_untracked")),
+            ("pootle_untracked", STATE_TITLES.get("pootle_untracked")),
+            ("fs_untracked", STATE_TITLES.get("fs_untracked")))
 
     @property
     def state_untracked(self):
+        state = self.state
         return (
-            self.state["conflict_untracked"]
-            + self.state["pootle_untracked"]
-            + self.state["fs_untracked"])
+            state["conflict_untracked"]
+            + state["pootle_untracked"]
+            + state["fs_untracked"])
 
     def save(self):
-        for item in self.items_to_save:
-            # TODO: check still in same state?
-            # state_type = item.split("/")[0]
-            pootle_path = "/".join(item.split("/")[1:])
-            pootle_path = "/%s" % pootle_path
-            self.fs.rm(pootle_path=pootle_path, force=True)
+        paths = []
+        states = []
+        select_all = (
+            self.cleaned_data[self.select_all_field]
+            and not any(
+                self.cleaned_data[k]
+                for k
+                in self.filter_fields))
+        if not select_all:
+            for item in self.items_to_save:
+                # TODO: check still in same state?
+                state_type = item.split("/")[0]
+                states.append(state_type)
+                pootle_path = "/".join(item.split("/")[1:])
+                pootle_path = "/%s" % pootle_path
+                paths.append(pootle_path)
+            state = self.state.filter(pootle_paths=paths, states=states)
+        else:
+            state = self.state
+        if self.cleaned_data["actions"] == "merge_fs":
+            self.fs.resolve(state=state)
+            self.fs.add(state=state)
+        if self.cleaned_data["actions"] == "merge_pootle":
+            self.fs.resolve(state=state, pootle_wins=True)
+            self.fs.add(state=state)
+        if self.cleaned_data["actions"] == "add_pootle":
+            self.fs.resolve(state=state, merge=False, pootle_wins=True)
+            self.fs.add(state=state, merge=False, pootle_wins=True)
+        if self.cleaned_data["actions"] == "add_fs":
+            self.fs.resolve(state=state, merge=False)
+            self.fs.add(state=state, merge=False)
+        elif self.cleaned_data["actions"] == "rm":
+            self.fs.rm(force=True, state=state)
+        revision_updater.get(
+            self.project.directory.__class__)(
+                self.project.directory).update(keys=["fs"])
 
 
 class ProjectFSStateUnsyncedForm(ProjectFSStateBaseForm):
@@ -314,9 +420,26 @@ class ProjectFSStateUnsyncedForm(ProjectFSStateBaseForm):
 
     def __init__(self, *args, **kwargs):
         super(ProjectFSStateUnsyncedForm, self).__init__(*args, **kwargs)
-        self.fields["unsynced"].choices = [
-            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
-            for assoc in self.state_unsynced]
+        self.fields["unsynced"].choices = self.unsynced_choices
+
+    @property
+    def cache_key(self):
+        return "pootle.fs.form.unsynced.%s" % self.fs.cache_key
+
+    @persistent_property
+    def unsynced_choices(self):
+        ks = ["pootle_path", "fs_path", "state_type"]
+        result = []
+        for assoc in self.state_unsynced:
+            kwargs = {k: getattr(assoc, k) for k in ks}
+            kwargs["class"] = kwargs["state_type"].replace("_", "-")
+            kwargs["state_type"] = StateTableRowItem(kwargs["state_type"])
+            if not assoc.kwargs.get("store_id"):
+                kwargs["class"] = "%s %s" % (kwargs["class"], "no-store")
+            if not assoc.kwargs.get("file_exists"):
+                kwargs["class"] = "%s %s" % (kwargs["class"], "no-file")
+            result.append(("%s%s" % (assoc.state_type, assoc.pootle_path), kwargs))
+        return result
 
     @property
     def state_choices(self):
@@ -330,24 +453,45 @@ class ProjectFSStateUnsyncedForm(ProjectFSStateBaseForm):
     def state_unsynced(self):
         return (
             self.state["remove"]
+            + self.state["merge_fs_wins"]
+            + self.state["merge_pootle_wins"]
+            + self.state["pootle_staged"]
+            + self.state["fs_staged"]
             + self.state["pootle_ahead"]
             + self.state["fs_ahead"])
 
     def save(self):
-        for item in self.items_to_save:
-            # TODO: check still in same state?
-            # state_type = item.split("/")[0]
-            pootle_path = "/".join(item.split("/")[1:])
-            pootle_path = "/%s" % pootle_path
-            if self.cleaned_data["actions"] == "unstage":
-                self.fs.unstage(pootle_path=pootle_path)
+        paths = []
+        states = []
+        if not self.cleaned_data[self.select_all_field]:
+            for item in self.items_to_save:
+                state_type = item.split("/")[0]
+                states.append(state_type)
+                pootle_path = "/".join(item.split("/")[1:])
+                pootle_path = "/%s" % pootle_path
+                paths.append(pootle_path)
+            state = self.state.filter(pootle_paths=paths, states=states)
+        else:
+            state = self.state
+        if self.cleaned_data["actions"] == "unstage":
+            self.fs.unstage(state=state)
+        elif self.cleaned_data["actions"] == "sync":
+            self.fs.sync(state=state)
+        revision_updater.get(
+            self.project.directory.__class__)(
+                self.project.directory).update(keys=["fs"])
 
 
 class ProjectFSStateConflictingForm(ProjectFSStateBaseForm):
     search_field = "conflicting"
     action_choices = (
         ("unstage", "Unstage any actions"),
-        ("sync", "Synchronize Pootle and the filesystem now"))
+        ("sync", "Synchronize Pootle and the filesystem now"),
+        ("merge_fs", "Merge both, file wins if units conflict"),
+        ("merge_pootle", "Merge both, Pootle store wins if units conflict"),
+        ("add_fs", "Keep file and overwrite Pootle store"),
+        ("add_pootle", "Keep Pootle store and overwrite file"),
+        ("rm", "Remove both Pootle store and file"))
     paginate_field = "conflicting"
     conflicting = forms.MultipleChoiceField(
         required=False,
@@ -357,18 +501,153 @@ class ProjectFSStateConflictingForm(ProjectFSStateBaseForm):
 
     def __init__(self, *args, **kwargs):
         super(ProjectFSStateConflictingForm, self).__init__(*args, **kwargs)
-        self.fields["conflicting"].choices = [
-            ("%s%s" % (assoc.state_type, assoc.pootle_path), assoc)
-            for assoc in self.state_conflicting]
+        self.fields["conflicting"].choices = self.conflicting_choices
+
+    @property
+    def conflicting_choices(self):
+        ks = ["fs_path", "state_type"]
+        result = []
+        for assoc in self.state_conflicting:
+            kwargs = {k: getattr(assoc, k) for k in ks}
+            kwargs["pootle_path"] = mark_safe(
+                '<a href="%s" target="_blank">%s</a>'
+                % (assoc.pootle_path, assoc.pootle_path))
+            kwargs["class"] = kwargs["state_type"].replace("_", "-")
+            kwargs["state_type"] = StateTableRowItem(kwargs["state_type"])
+            result.append(("%s%s" % (assoc.state_type, assoc.pootle_path), kwargs))
+        return result
+
+    @property
+    def cache_key(self):
+        return "pootle.fs.form.conflicting.%s" % self.fs.cache_key
+
+    @property
+    def state_choices(self):
+        return (
+            ("", ""),
+            ("conflict_untracked", STATE_TITLES.get("conflict_untracked")),
+            ("conflict", STATE_TITLES.get("conflict")))
 
     @property
     def state_conflicting(self):
-        return self.state["conflict"]
+        return self.state["conflict"] + self.state["conflict_untracked"]
 
     def save(self):
-        for item in self.items_to_save:
-            # TODO: check still in same state?
-            # state_type = item.split("/")[0]
-            pootle_path = "/".join(item.split("/")[1:])
-            pootle_path = "/%s" % pootle_path
-            self.fs.rm(pootle_path=pootle_path, force=True)
+        paths = []
+        states = []
+        select_all = (
+            self.cleaned_data[self.select_all_field]
+            and not any(
+                self.cleaned_data[k]
+                for k
+                in self.filter_fields))
+        if not select_all:
+            for item in self.items_to_save:
+                # TODO: check still in same state?
+                state_type = item.split("/")[0]
+                states.append(state_type)
+                pootle_path = "/".join(item.split("/")[1:])
+                pootle_path = "/%s" % pootle_path
+                paths.append(pootle_path)
+            state = self.state.filter(pootle_paths=paths, states=states)
+        else:
+            state = self.state
+        if self.cleaned_data["actions"] == "merge_fs":
+            self.fs.resolve(state=state)
+        if self.cleaned_data["actions"] == "merge_pootle":
+            self.fs.resolve(state=state, pootle_wins=True)
+        if self.cleaned_data["actions"] == "add_pootle":
+            self.fs.resolve(state=state, merge=False, pootle_wins=True)
+        if self.cleaned_data["actions"] == "add_fs":
+            self.fs.resolve(state=state, merge=False)
+        elif self.cleaned_data["actions"] == "rm":
+            self.fs.rm(state=state)
+        revision_updater.get(
+            self.project.directory.__class__)(
+                self.project.directory).update(keys=["fs"])
+
+
+class ProjectFSStateTrackedForm(ProjectFSStateBaseForm):
+    search_field = "tracked"
+    paginate_field = "tracked"
+    action_choices = (
+        ("merge_fs", "Add tracking (merge on conflict, fs wins)"),
+        ("merge_pootle", "Add tracking (merge on conflict, Pootle wins)"),
+        ("add_fs", "Add tracking (overwrite Pootle from fs)"),
+        ("add_pootle", "Add tracking (overwrite fs from Pootle)"),
+        ("rm", "Remove both Pootle and filesystem store"))
+    tracked = forms.MultipleChoiceField(
+        required=False,
+        widget=TableSelectMultiple(
+            item_attrs=["pootle_path", "fs_path", "state_type"]),
+        choices=[])
+
+    def __init__(self, *args, **kwargs):
+        super(ProjectFSStateTrackedForm, self).__init__(*args, **kwargs)
+        self.fields["tracked"].choices = self.tracked_choices
+
+    @property
+    def cache_key(self):
+        return "pootle.fs.form.untracked.%s" % self.fs.cache_key
+
+    @persistent_property
+    def tracked_choices(self):
+        result = []
+        for assoc in self.state.resources.tracked:
+            kwargs = {}
+            kwargs["pootle_path"] = mark_safe(
+                '<a href="%s" target="_blank">%s</a>'
+                % (assoc.pootle_path, assoc.pootle_path))
+            kwargs["fs_path"] = assoc.path
+            kwargs["state_type"] = "up_to_date"
+            kwargs["state_type"] = StateTableRowItem(kwargs["state_type"])
+            result.append(
+                ("%s%s"
+                 % (kwargs["state_type"], assoc.pootle_path), kwargs))
+        return result
+
+    @property
+    def state_choices(self):
+        return (
+            ("", ""),
+            ("up_to_date", STATE_TITLES.get("up_to_date")),
+            ("pootle_ahead", STATE_TITLES.get("pootle_ahead")),
+            ("fs_ahead", STATE_TITLES.get("fs_ahead")))
+
+    def save(self):
+        paths = []
+        states = []
+        select_all = (
+            self.cleaned_data[self.select_all_field]
+            and not any(
+                self.cleaned_data[k]
+                for k
+                in self.filter_fields))
+        if not select_all:
+            for item in self.items_to_save:
+                # TODO: check still in same state?
+                state_type = item.split("/")[0]
+                states.append(state_type)
+                pootle_path = "/".join(item.split("/")[1:])
+                pootle_path = "/%s" % pootle_path
+                paths.append(pootle_path)
+            state = self.state.filter(pootle_paths=paths, states=states)
+        else:
+            state = self.state
+        if self.cleaned_data["actions"] == "merge_fs":
+            self.fs.resolve(state=state)
+            self.fs.add(state=state)
+        if self.cleaned_data["actions"] == "merge_pootle":
+            self.fs.resolve(state=state, pootle_wins=True)
+            self.fs.add(state=state)
+        if self.cleaned_data["actions"] == "add_pootle":
+            self.fs.resolve(state=state, merge=False, pootle_wins=True)
+            self.fs.add(state=state, merge=False, pootle_wins=True)
+        if self.cleaned_data["actions"] == "add_fs":
+            self.fs.resolve(state=state, merge=False)
+            self.fs.add(state=state, merge=False)
+        elif self.cleaned_data["actions"] == "rm":
+            self.fs.rm(force=True, state=state)
+        revision_updater.get(
+            self.project.directory.__class__)(
+                self.project.directory).update(keys=["fs"])

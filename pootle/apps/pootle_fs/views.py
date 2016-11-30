@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from pootle.core.views.admin import PootleAdminFormView
 from pootle.core.views.formtable import Formtable
@@ -19,8 +19,8 @@ from pootle_project.models import Project
 
 from .forms import (
     FS_CHOICES, LangMappingFormSet, ProjectFSAdminForm,
-    ProjectFSStateConflictingForm, ProjectFSStateUnsyncedForm,
-    ProjectFSStateUntrackedForm)
+    ProjectFSStateConflictingForm, ProjectFSStateTrackedForm,
+    ProjectFSStateUnsyncedForm, ProjectFSStateUntrackedForm)
 
 
 class ProjectFSStateAdminView(PootleAdminFormView):
@@ -46,11 +46,10 @@ class ProjectFSAdminBaseView(PootleAdminFormView):
 
 class ProjectFSStateAdminBaseView(ProjectFSAdminBaseView):
     template_name = 'admin/project_fs_state.html'
+    page_name = None
 
     def form_valid(self, form):
-        # TODO: save form and redirect if update_action
-        if form.has_actions:
-            form.save()
+        if form.should_save():
             messages.success(self.request, "Added some stuff")
             return super(ProjectFSStateAdminBaseView, self).form_valid(form)
         return self.render_to_response(self.get_context_data(form=form))
@@ -64,9 +63,8 @@ class ProjectFSStateAdminBaseView(ProjectFSAdminBaseView):
         results_per_page = 10
         if form.is_valid():
             results_per_page = form.cleaned_data["results_per_page"]
-            pageno = form.cleaned_data["page"]
+            pageno = form.cleaned_data["page_no"]
         choices = form.search()
-
         paginator = Paginator(choices, results_per_page)
         page = paginator.page(pageno)
         form.fields[form.paginate_field].choices = page.object_list
@@ -74,6 +72,7 @@ class ProjectFSStateAdminBaseView(ProjectFSAdminBaseView):
             form,
             columns=["Pootle path", "Filesystem path", "State"],
             page=page)
+        context["page_name"] = self.page_name
         return context
 
     @property
@@ -89,6 +88,12 @@ class ProjectFSUnsyncedFormtable(Formtable):
     empty_message = _("There are no stores and files waiting to be synced")
 
 
+class ProjectFSTrackedFormtable(Formtable):
+    filters_template = "includes/fs/untracked_filters.html"
+    row_field = "tracked"
+    empty_message = _("There are no tracked stores and files")
+
+
 class ProjectFSUntrackedFormtable(Formtable):
     filters_template = "includes/fs/untracked_filters.html"
     row_field = "untracked"
@@ -101,10 +106,18 @@ class ProjectFSConflictingFormtable(Formtable):
     empty_message = _("There are no stores and files currently conflicting")
 
 
+class ProjectFSStateTrackedAdminView(ProjectFSStateAdminBaseView):
+    form_class = ProjectFSStateTrackedForm
+    form_table_class = ProjectFSTrackedFormtable
+    success_url_pattern = "pootle-admin-project-fs-state-tracked"
+    page_name = "tracked"
+
+
 class ProjectFSStateUntrackedAdminView(ProjectFSStateAdminBaseView):
     form_class = ProjectFSStateUntrackedForm
     form_table_class = ProjectFSUntrackedFormtable
     success_url_pattern = "pootle-admin-project-fs-state-untracked"
+    page_name = "untracked"
 
 
 class ProjectFSStateUnsyncedAdminView(ProjectFSStateAdminBaseView):
@@ -112,6 +125,7 @@ class ProjectFSStateUnsyncedAdminView(ProjectFSStateAdminBaseView):
     form_table_class = ProjectFSUnsyncedFormtable
     paginate_form_field = "unsynced"
     success_url_pattern = "pootle-admin-project-fs-state-unsynced"
+    page_name = "unsynced"
 
 
 class ProjectFSStateConflictingAdminView(ProjectFSStateAdminBaseView):
@@ -119,6 +133,7 @@ class ProjectFSStateConflictingAdminView(ProjectFSStateAdminBaseView):
     form_table_class = ProjectFSConflictingFormtable
     paginate_form_field = "conflicting"
     success_url_pattern = "pootle-admin-project-fs-state-conflicting"
+    page_name = "conflicting"
 
 
 class ProjectFSAdminView(PootleAdminFormView):

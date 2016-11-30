@@ -10,7 +10,7 @@ from django.conf.urls import url
 
 from .views import (
     ProjectFSAdminView, ProjectFSStateAdminView,
-    ProjectFSStateConflictingAdminView,
+    ProjectFSStateConflictingAdminView, ProjectFSStateTrackedAdminView,
     ProjectFSStateUnsyncedAdminView, ProjectFSStateUntrackedAdminView)
 
 
@@ -21,6 +21,9 @@ urlpatterns = [
     url(r'^admin/projects/(?P<project_code>[^/]*)/fs/state/?$',
         ProjectFSStateAdminView.as_view(),
         name='pootle-admin-project-fs-state'),
+    url(r'^admin/projects/(?P<project_code>[^/]*)/fs/state/tracked/?$',
+        ProjectFSStateTrackedAdminView.as_view(),
+        name='pootle-admin-project-fs-state-tracked'),
     url(r'^admin/projects/(?P<project_code>[^/]*)/fs/state/untracked/?$',
         ProjectFSStateUntrackedAdminView.as_view(),
         name='pootle-admin-project-fs-state-untracked'),
