@@ -21,8 +21,9 @@ from pootle_fs.state import FS_STATE, ProjectFSState
 from pootle_store.constants import POOTLE_WINS, SOURCE_WINS
 
 
-def _test_state(plugin, pootle_path, fs_path, state_type, paths=None):
-    state = ProjectFSState(plugin, pootle_path=pootle_path, fs_path=fs_path)
+def _test_state(plugin, pootle_path, fs_path, state_type, paths=None, state=None):
+    state = state or ProjectFSState(
+        plugin, pootle_path=pootle_path, fs_path=fs_path)
     if paths is None:
         paths = list(
             state.resources.storefs_filter.filtered(
@@ -98,10 +99,35 @@ def test_fs_state_fs_removed(fs_path_qs, dummyfs_plugin_no_files):
 def test_fs_state_pootle_ahead(fs_path_qs, dummyfs):
     (qfilter, pootle_path, fs_path) = fs_path_qs
     plugin = dummyfs
+
     for store_fs in plugin.resources.tracked:
         store_fs.last_sync_revision = store_fs.last_sync_revision - 1
         store_fs.save()
-    _test_state(plugin, pootle_path, fs_path, "pootle_ahead")
+
+    class UnchangedStateResources(FSProjectStateResources):
+
+        @property
+        def file_hashes(self):
+            hashes = {}
+            for pootle_path, path in self.found_file_matches:
+                try:
+                    hashes[pootle_path] = self.tracked.get(
+                        pootle_path=pootle_path).last_sync_hash
+                except StoreFS.DoesNotExist:
+                    pass
+            return hashes
+
+    class UnchangedFSState(ProjectFSState):
+
+        @property
+        def resources(self):
+            return UnchangedStateResources(
+                self.context,
+                pootle_path=self.pootle_path,
+                fs_path=self.fs_path)
+
+    state = UnchangedFSState(plugin, fs_path=fs_path, pootle_path=pootle_path)
+    _test_state(plugin, pootle_path, fs_path, "pootle_ahead", state=state)
 
 
 @pytest.mark.django_db
