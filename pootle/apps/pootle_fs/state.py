@@ -299,16 +299,24 @@ class ProjectFSState(State):
 
     @property
     def state_pootle_ahead(self):
-        for store_fs in self.resources.pootle_changed.iterator():
-            pootle_changed_, fs_changed = self._get_changes(store_fs.file)
-            pootle_ahead = (
-                not fs_changed
-                or store_fs.resolve_conflict == POOTLE_WINS)
-            if pootle_ahead:
-                yield dict(
-                    store_fs=store_fs.pk,
-                    pootle_path=store_fs.pootle_path,
-                    fs_path=store_fs.path)
+        all_pootle_changed = self.resources.pootle_changed
+        all_fs_changed = list(self.resources.fs_changed)
+        pootle_changed = (
+            all_pootle_changed.exclude(id__in=all_fs_changed)
+            | (all_pootle_changed.filter(id__in=all_fs_changed)
+                                 .filter(resolve_conflict=POOTLE_WINS)))
+        pootle_revisions = self.resources.pootle_revisions
+        pootle_changed = pootle_changed.values_list(
+            "pk", "pootle_path", "path", "store_id", "store__obsolete")
+        for changed in pootle_changed.order_by("-pootle_path").iterator():
+            pk, pootle_path, path, store_id, store_obsolete = changed
+            if store_id not in pootle_revisions:
+                # store_removed
+                continue
+            yield dict(
+                store_fs=pk,
+                pootle_path=pootle_path,
+                fs_path=path)
 
     @property
     def state_pootle_staged(self):
