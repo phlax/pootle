@@ -112,13 +112,19 @@ def dummyfs(settings, no_fs_plugins, no_fs_files):
     from pootle_fs.utils import FSPlugin
     from pootle_project.models import Project
 
+    class DummyFile(FSFile):
+
+        @property
+        def latest_hash(self):
+            return self.store_fs.last_sync_hash
+
     @provider(fs_plugins, weak=False)
     def plugin_provider_(**kwargs_):
         return dict(dummyfs=DummyPlugin)
 
     @getter(fs_file, weak=False, sender=DummyPlugin)
     def fs_files_getter_(**kwargs_):
-        return FSFile
+        return DummyFile
 
     project = Project.objects.get(code="project0")
     settings.POOTLE_FS_WORKING_PATH = os.sep.join(['', 'tmp', 'foo'])
