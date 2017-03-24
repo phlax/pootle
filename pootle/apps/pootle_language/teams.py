@@ -77,6 +77,7 @@ class LanguageTeam(object):
             unit__store__translation_project__language=self.language)
         suggestions = suggestions.select_related(
             "unit",
+            "unit__change",
             "unit__store",
             "unit__store__translation_project",
             "unit__store__translation_project__project")

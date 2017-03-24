@@ -188,6 +188,8 @@ class LanguageSuggestionAdminForm(LanguageTeamFormtableForm):
         required=False,
         queryset=Suggestion.objects.select_related(
             "unit",
+            "unit__change",
+            "unit__change__submitted_by",
             "unit__store",
             "unit__store__translation_project",
             "unit__store__translation_project__project").none())
@@ -213,7 +215,7 @@ class LanguageSuggestionAdminForm(LanguageTeamFormtableForm):
 
     @property
     def suggestions_qs(self):
-        return self.language_team.suggestions.select_related("unit", "user").filter(
+        return self.language_team.suggestions.select_related("unit", "unit__change", "user").filter(
             unit__store__translation_project__project__disabled=False)
 
     @property
