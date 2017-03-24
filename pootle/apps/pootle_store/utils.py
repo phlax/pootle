@@ -213,13 +213,13 @@ class SuggestionsReview(object):
         store = suggestion.unit.store
         suggestion.state = SuggestionState.objects.get(name="rejected")
         suggestion.review_time = make_aware(timezone.now())
-        suggestion.reviewer = self.reviewer
+        suggestion.reviewer_id = self.reviewer.id
         suggestion.save()
         unit = suggestion.unit
         if unit.changed:
             # if the unit is translated and suggestion was rejected
             # set the reviewer info
-            unit.change.reviewed_by = self.reviewer
+            unit.change.reviewed_by_id = self.reviewer.id
             unit.change.reviewed_on = suggestion.review_time
             unit.change.save()
         update_data.send(store.__class__, instance=store)
@@ -344,7 +344,7 @@ class UnitLifecycle(object):
         _kwargs = dict(
             creation_time=self.unit.mtime,
             unit=self.unit,
-            submitter=self.unit.change.commented_by,
+            submitter_id=self.unit.change.commented_by_id,
             field=SubmissionFields.COMMENT,
             type=self.unit.change.changed_with,
             old_value=self.original.translator_comment or "",
@@ -356,7 +356,7 @@ class UnitLifecycle(object):
         _kwargs = dict(
             creation_time=self.unit.mtime,
             unit=self.unit,
-            submitter=self.unit.change.submitted_by,
+            submitter_id=self.unit.change.submitted_by_id,
             field=SubmissionFields.SOURCE,
             type=self.unit.change.changed_with,
             old_value=self.original.source or "",
@@ -366,13 +366,13 @@ class UnitLifecycle(object):
 
     def sub_target_update(self, **kwargs):
         submitter = (
-            self.unit.change.submitted_by
-            if self.unit.change.submitted_by
-            else self.unit.change.reviewed_by)
+            self.unit.change.submitted_by_id
+            if self.unit.change.submitted_by_id
+            else self.unit.change.reviewed_by_id)
         _kwargs = dict(
             creation_time=self.unit.mtime,
             unit=self.unit,
-            submitter=submitter,
+            submitter_id=submitter,
             field=SubmissionFields.TARGET,
             type=self.unit.change.changed_with,
             old_value=self.original.target or "",
@@ -389,13 +389,13 @@ class UnitLifecycle(object):
             reviewed_on
             and (reviewed_on > submitted_on))
         if is_review:
-            submitter = self.unit.change.reviewed_by
+            submitter = self.unit.change.reviewed_by_id
         else:
-            submitter = self.unit.change.submitted_by
+            submitter = self.unit.change.submitted_by_id
         _kwargs = dict(
             creation_time=self.unit.mtime,
             unit=self.unit,
-            submitter=submitter,
+            submitter_id=submitter,
             field=SubmissionFields.STATE,
             type=self.unit.change.changed_with,
             old_value=self.original.state,

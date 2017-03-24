@@ -302,13 +302,13 @@ class Unit(AbstractUnit):
             if changed_with is not None:
                 self.change.changed_with = changed_with
             if self.comment_updated:
-                self.change.commented_by = user
+                self.change.commented_by_id = user.id
                 self.change.commented_on = timestamp
             update_submit = (
                 (self.target_updated or self.source_updated)
                 or not self.change.submitted_on)
             if update_submit:
-                self.change.submitted_by = user
+                self.change.submitted_by_id = user.id
                 self.change.submitted_on = timestamp
             is_review = (
                 reviewed_by != user
@@ -316,7 +316,7 @@ class Unit(AbstractUnit):
                 or (self.state_updated
                     and self.state == UNTRANSLATED))
             if is_review:
-                self.change.reviewed_by = reviewed_by
+                self.change.reviewed_by_id = reviewed_by.id
                 self.change.reviewed_on = timestamp
             self.change.save()
         update_data.send(
