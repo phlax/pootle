@@ -21,6 +21,8 @@ class TableSelectMultiple(SelectMultiple):
         field.choices = [(item.id, item) for item in item_list]
     """
 
+    template_name = 'includes/widgets/tableselectmultiple.html'
+
     def __init__(self, item_attrs, *args, **kwargs):
         """
         item_attrs
@@ -42,7 +44,7 @@ class TableSelectMultiple(SelectMultiple):
         if value is None:
             value = []
         has_id = attrs and 'id' in attrs
-        final_attrs = self.build_attrs(attrs)
+        final_attrs = self.build_attrs(attrs or {})
         output = []
         # Normalize to strings.
         str_values = set([force_text(v) for v in value])
