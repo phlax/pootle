@@ -8,7 +8,7 @@
 
 from collections import OrderedDict
 
-from translate.lang.data import get_language_iso_fullname
+from babel import Locale
 
 from django.conf import settings
 from django.db import models
@@ -16,10 +16,10 @@ from django.urls import reverse
 from django.utils import translation
 from django.utils.functional import cached_property
 
-from pootle.core.delegate import data_tool, language_code, site_languages
+from pootle.core.delegate import data_tool, language_code
 from pootle.core.mixins import TreeItem
 from pootle.core.url_helpers import get_editor_filter
-from pootle.i18n.gettext import language_dir, tr_lang, ugettext_lazy as _
+from pootle.i18n.gettext import language_dir, ugettext_lazy as _
 from staticpages.models import StaticPage
 
 
@@ -85,7 +85,6 @@ class Language(models.Model, TreeItem):
         if request lang == server lang, and fullname is set. Uses code
         as the ultimate fallback
         """
-        site_langs = site_languages.get()
         server_code = language_code.get()(settings.LANGUAGE_CODE)
         request_code = language_code.get()(translation.get_language())
         use_db_name = (
@@ -94,11 +93,7 @@ class Language(models.Model, TreeItem):
                 and server_code.matches(request_code)))
         if use_db_name:
             return self.fullname
-        iso_name = get_language_iso_fullname(self.code) or self.fullname
-        return (
-            site_langs.capitalize(tr_lang(iso_name))
-            if iso_name
-            else self.code)
+        return Locale.parse(self.code).get_display_name(request_code)
 
     @property
     def direction(self):
