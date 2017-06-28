@@ -6,7 +6,7 @@
 # or later license. See the LICENSE file for a copy of the license and the
 # AUTHORS file for copyright and authorship information.
 
-from translate.lang.data import get_language_iso_fullname
+from babel import Locale
 
 from django.conf import settings
 from django.utils.translation import get_language
@@ -14,7 +14,6 @@ from django.utils.translation import get_language
 from pootle.core import language
 from pootle.core.decorators import persistent_property
 from pootle.core.delegate import language_code, revision
-from pootle.i18n.gettext import tr_lang
 from pootle_app.models import Directory
 
 from .apps import PootleLanguageConfig
@@ -63,14 +62,12 @@ class SiteLanguages(object):
             request_code = language_code.get()(self.request_lang)
             matches = server_code.matches(request_code)
         if matches:
-            trans_func = lambda code, name: name
-        else:
-            trans_func = lambda code, name: self.capitalize(
-                tr_lang(
-                    get_language_iso_fullname(code)
-                    or name))
+            return {
+                code: name
+                for code, name
+                in langs}
         return {
-            code: trans_func(code, name)
+            Locale.parse(code).get_display_name(request_code)
             for code, name
             in langs}
 
