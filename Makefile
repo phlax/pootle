@@ -106,6 +106,7 @@ lint-js:
 
 lint-css:
 	cd ${JS_DIR} \
+	&& npm list \
 	&& npm run stylelint
 
 test-js:
