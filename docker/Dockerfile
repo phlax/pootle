@@ -56,7 +56,6 @@ RUN su -c "bash /tmp/build/install-eggs" $APP_USERNAME
 FROM root
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-EXPOSE 8000
 
 COPY ./app /tmp/build
 COPY ./bin /tmp/build/bin
