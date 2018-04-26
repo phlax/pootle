@@ -29,11 +29,7 @@ services:
         - BUILD_IMAGE=production
         - BUILD_INSTALL_EGGS=psycopg2-binary uwsgi
         - BASE_INSTALL_PKGS=postgresql-client libpython2.7
-    command: ["/app/src/pootle/docker/bin/run_in_container", "bash", "uwsgi", "--ini", "/app/wsgi/pootle-uwsgi.ini"]
-    volumes:
-      - production-assets:/app/lib/python2.7/site-packages/pootle/assets
-      - production-run:/var/run/pootle
-      - production-logs:/app/log
+    command: ["/app/src/pootle/docker/bin/run_uwsgi"]
 
   # Postgres based production image
   production:
@@ -43,6 +39,10 @@ services:
       - postgres
       - redis
       - elasticsearch
+    volumes:
+      - production-assets:/app/assets
+      - production-run:/var/run/pootle
+      - production-logs:/app/log
 
   # Postgres based production image using current pre-release
   production-pre:
@@ -55,14 +55,32 @@ services:
       - postgres
       - redis
       - elasticsearch
+    volumes:
+      - production-assets:/app/assets
+      - production-run:/var/run/pootle
+      - production-logs:/app/log
+
+  # Postgres based production image using current master
+  production-master:
+    image: translate/pootle:production-master
+    extends: base-production
+    build:
+      args:
+        - APP_PKG="-e https://github.com/phlax/pootle@docker-cleanups#egg=Pootle"
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    volumes:
+      - production-assets:/app/assets
+      - production-run:/var/run/pootle
+      - production-logs:/app/log
 
   ## Other services
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.2.3
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.5.3
     restart: always
-    ports:
-      - 9200:9200
     environment:
       - cluster.name=docker-cluster
       - transport.host=127.0.0.1
@@ -88,17 +106,19 @@ services:
     volumes:
       - redis-data:/data
 
-  web:
+  nginx:
     image: translate/pootle:web-nginx
     build:
       context: ./docker/nginx
-    depends_on:
-      - "${POOTLE_PRODUCTION_IMAGE:-production}"
     ports:
       - "80:80"
       - "443:443"
     command: /usr/local/bin/start_nginx
-    restart: always
+
+  web:
+    extends: nginx
+    depends_on:
+      - "${POOTLE_PRODUCTION_IMAGE:-production}"
     volumes:
       - production-ssl:/etc/letsencrypt
       - production-assets:/var/www/assets
@@ -106,6 +126,7 @@ services:
       - web-logs:/var/log/nginx/pootle
     environment:
       - POOTLE_SERVER_NAME=${POOTLE_SERVER_NAME:-localhost}
+      - POOTLE_SERVER_NAMES=${POOTLE_SERVER_NAMES:-}
 
   certbot:
     image: certbot/certbot
@@ -120,5 +141,3 @@ volumes:
   production-logs:
   production-ssl:
   web-logs:
-  postgres-data:
-  redis-data:
