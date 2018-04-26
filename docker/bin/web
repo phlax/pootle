@@ -2,21 +2,12 @@
 
 set -e
 
-IMAGE='web'
-DOCKER_CMD=$1
 
-
-function image_exists() {
-    IMAGE_EXISTS=$(docker-compose images -q $IMAGE)
-}
-
-image_exists
-
-if [[ -z $IMAGE_EXISTS || $DOCKER_CMD = 'pull' ]]; then
-    echo "Pulling $IMAGE"
-    docker-compose pull --include-deps $IMAGE
+if [ -f .env ]; then
+    . .env
 fi
 
+SERVICE=${POOTLE_WEB_SERVICE:-web}
 
-echo "Running web stack"
-docker-compose up $IMAGE
+echo "Running web stack: $SERVICE"
+docker-compose up $SERVICE
