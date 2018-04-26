@@ -41,5 +41,6 @@ else
                --no-cache-dir \
                --process-dependency-links \
                $APP_PKG \
+	       elasticsearch~=5.0 \
         && pyclean .
 fi
