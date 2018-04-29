@@ -43,4 +43,19 @@ else
                $APP_PKG \
 	       elasticsearch~=5.0 \
         && pyclean .
+
+    if [ -d "$APP_DIR/lib/python2.7/site-packages/pootle/assets" ]; then
+	echo "Shifting assets directory to $APP_DIR/assets"
+	ASSET_SRC_DIR="$APP_DIR/lib/python2.7/site-packages/pootle/assets"
+    else
+	. bin/activate \
+	    && cd $APP_DIR/src/pootle \
+	    && . $APP_DIR/nvm/nvm.sh \
+	    && pootle init --config $APP_DIR/pootle.conf \
+	    && nvm install node \
+	    && make assets
+	ASSET_SRC_DIR="$APP_DIR/src/pootle/pootle/assets"
+	rm $APP_DIR/pootle.conf
+    fi
+    mv $ASSET_SRC_DIR  $APP_DIR/assets
 fi
