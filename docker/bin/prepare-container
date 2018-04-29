@@ -24,6 +24,7 @@ if [ $BUILD_IMAGE = 'production' ]; then
     chown -R $APP_USERNAME:$APP_USERNAME /var/run/pootle
     mkdir -p $APP_DIR/log
     chown -R $APP_USERNAME:$APP_USERNAME $APP_DIR/log
+    chown -R $APP_USERNAME:$APP_USERNAME $APP_DIR/assets
 fi
 
 
