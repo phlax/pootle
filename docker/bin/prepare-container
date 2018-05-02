@@ -6,10 +6,12 @@ set -e
 
 APP_ID=$(id -u $APP_USERNAME)
 
-su -c " \
-   . $APP_DIR/bin/activate \
-   && cd $APP_SRC_DIR \
-   && ./docker/bin/update-container" $APP_USERNAME
+if [ $BUILD_IMAGE != 'production' ]; then
+    su -c " \
+       .    $APP_DIR/bin/activate \
+       && cd $APP_SRC_DIR \
+       && ./docker/bin/update-container" $APP_USERNAME
+fi
 
 if [ $BUILD_IMAGE = 'dev' ]; then
     if [[ ( ! -z ${LOCAL_USER_ID:+x} ) && ( $LOCAL_USER_ID != "''" ) && ( "$LOCAL_USER_ID" != "$APP_ID" ) ]]; then
@@ -21,14 +23,15 @@ fi
 
 
 if [ $BUILD_IMAGE = 'production' ]; then
-    chown -R $APP_USERNAME:$APP_USERNAME /var/run/pootle
+    chown -R $APP_USERNAME:$APP_USERNAME $APP_DIR/sockets
     mkdir -p $APP_DIR/log
     chown -R $APP_USERNAME:$APP_USERNAME $APP_DIR/log
     chown -R $APP_USERNAME:$APP_USERNAME $APP_DIR/assets
 fi
 
-
-su -c " \
-   . $APP_DIR/bin/activate \
-   && cd $APP_SRC_DIR \
-   && ./docker/bin/update-container-after-usermod" $APP_USERNAME
+if [ $BUILD_IMAGE != 'production' ]; then
+    su -c " \
+       . $APP_DIR/bin/activate \
+       && cd $APP_SRC_DIR \
+       && ./docker/bin/update-container-after-usermod" $APP_USERNAME
+fi

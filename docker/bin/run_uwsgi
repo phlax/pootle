@@ -1,39 +1,5 @@
 #!/bin/bash
 
-APP_SCRIPTS_DIR=$(readlink -f --canonicalize $(eval echo $APP_SCRIPTS_DIR))
+echo "Starting uwsgi again..."
 
-REVISION=$($APP_SCRIPTS_DIR/run_shell revision)
-
-
-# Ensure we can connect to the database
-. $APP_DIR/bin/activate \
-   && cd $APP_SRC_DIR \
-   && pootle shell -c "from django.db import connection; connection.ensure_connection()"
-
-if [ $? -ne 0 ]; then
-    echo "Unable to connect to the database"
-    exit 1
-fi
-
-
-. $APP_DIR/bin/activate \
-   && cd $APP_SRC_DIR \
-   && pootle shell -c "from django.contrib.auth import get_user_model; assert get_user_model().objects.count()"
-
-if [ $? -ne 0 ]; then
-    echo "Database has not been intialized, doing it now..."
-    $APP_SCRIPTS_DIR/run_shell migrate
-    $APP_SCRIPTS_DIR/run_shell initdb --no-projects
-fi
-
-echo 'continuing...'
-
-if [ -z "$REVISION" ]; then
-    echo "Restoring revision..."
-    $APP_SCRIPTS_DIR/run_shell revision --restore
-fi
-
-echo $REVISION
-
-echo "Starting uwsgi..."
-$APP_SCRIPTS_DIR/run_bash uwsgi --ini /app/wsgi/pootle-uwsgi.ini
+$APP_DIR/bin/uwsgi --ini /app/wsgi/pootle-uwsgi.ini
