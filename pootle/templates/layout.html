@@ -1,8 +1,9 @@
-{% load core i18n assets locale profile_tags static statici18n select2l10n %}
+{% load core i18n assets locale profile_tags static statici18n select2l10n analytical %}
 {% get_current_language as LANGUAGE_CODE %}
 <!DOCTYPE html>
 <html lang="{{ LANGUAGE_CODE }}" dir="{% locale_dir %}" id="{% block html_id %}pootle-base{% endblock %}" class="{{ settings.POOTLE_INSTANCE_ID }}">
   <head>
+    {% analytical_head_top %}
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <title>{% block title %}{{ settings.POOTLE_TITLE }}{% endblock title %}</title>
@@ -84,10 +85,12 @@
     </script>
     {% endblock js %}
     {% block extra_head %}{% endblock %}
+    {% analytical_head_bottom %}
   </head>
 
   <body id="{% block body_id %}pootle-body-base{% endblock %}" class="{% block body_class %}{% endblock %}">
     {% block body %}
+    {% analytical_body_top %}
     <div id="wrapper">
       {% block wrapper %}
       <noscript>
@@ -203,5 +206,6 @@
     {% endblock body %}
     <div class="js-auth"></div>{# Mount point for auth views #}
     <div style="display: none;">{% csrf_token %}</div>
+    {% analytical_body_bottom %}
   </body>
 </html>
