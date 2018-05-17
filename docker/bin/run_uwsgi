@@ -1,5 +1,5 @@
 #!/bin/bash
 
-echo "Starting uwsgi again..."
+echo "Starting uwsgi..."
 
-$APP_DIR/bin/uwsgi --ini /app/wsgi/pootle-uwsgi.ini
+exec $APP_DIR/bin/uwsgi --ini /app/wsgi/pootle-uwsgi.ini
