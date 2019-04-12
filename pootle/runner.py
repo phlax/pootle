@@ -17,10 +17,12 @@ from argparse import SUPPRESS, ArgumentParser
 from django.conf import settings
 from django.core import management
 
-import syspath_override  # noqa
 from pootle.core.cache import PERSISTENT_STORES
 from pootle.core.log import cmd_log
 
+
+POOTLE_DIR = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(POOTLE_DIR, 'apps'))
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
